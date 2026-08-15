@@ -1,0 +1,24 @@
+pi-dsh-minimal ports the official DeepSeek Harness `minimal` agent
+preset's model-facing surface from:
+
+  https://github.com/deepseek-ai/deepseek-harness
+  commit 47f943859bef60e4160492346772ded9b24f765a
+
+That surface is:
+
+  - the complete system prompt
+    `You are a helpful software engineer assistant.`
+  - persistent `bash` (`@deepseek-ai/dsh-tool-bash-persistent`)
+  - `str_replace_editor` (`@deepseek-ai/dsh-tool-str-replace-editor`)
+
+including the official tool descriptions, JSON parameter schemas, and
+the editor's view / create / str_replace / insert result strings.
+
+DeepSeek Harness is distributed under the MIT License:
+
+  Copyright (c) 2026 DeepSeek
+
+The full MIT permission notice is included in this repository's LICENSE file.
+
+DeepSeek and DeepSeek Harness are names of their respective owner. This
+community project is not affiliated with or endorsed by DeepSeek.

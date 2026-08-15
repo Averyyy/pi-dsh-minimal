@@ -1,2 +1,10 @@
 # 本地参考克隆(ref 下的 deepseek-harness 等),不纳入本仓库
 ref/
+
+node_modules/
+*.tgz
+.pi/
+tmp/
+coverage/
+*.log
+.DS_Store

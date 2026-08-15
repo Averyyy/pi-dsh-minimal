@@ -1,0 +1,70 @@
+{
+  "name": "pi-dsh-minimal",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness minimal-mode adapter for Pi: official two-tool surface and fixed persona, defaulting to DeepSeek V4 Pro",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Averyyy/pi-dsh-minimal.git"
+  },
+  "homepage": "https://github.com/Averyyy/pi-dsh-minimal#readme",
+  "bugs": {
+    "url": "https://github.com/Averyyy/pi-dsh-minimal/issues"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "extension",
+    "deepseek",
+    "dsh",
+    "minimal",
+    "deepseek-harness",
+    "deepseek-v4-pro"
+  ],
+  "license": "MIT",
+  "author": "Averyyy",
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "files": [
+    "src/**/*.ts",
+    "CHANGELOG.md",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "NOTICE",
+    "scripts/live-trajectory.mjs"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test tests/**/*.test.ts",
+    "check": "npm run typecheck && npm run test",
+    "live:trajectory": "node scripts/live-trajectory.mjs",
+    "prepack": "npm run check"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-agent-core": "^0.84.2",
+    "@earendil-works/pi-ai": "^0.84.2",
+    "@earendil-works/pi-coding-agent": "^0.84.2",
+    "@earendil-works/pi-tui": "^0.84.2",
+    "@types/node": "^22.18.0",
+    "tsx": "^4.20.5",
+    "typebox": "^1.1.24",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}
