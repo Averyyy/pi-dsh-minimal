@@ -2,9 +2,26 @@
 
 [中文说明](./README.zh-CN.md)
 
+[![npm](https://img.shields.io/npm/v/pi-dsh-minimal.svg)](https://www.npmjs.com/package/pi-dsh-minimal)
+[![pi.dev](https://img.shields.io/badge/pi.dev-package-111111)](https://pi.dev/packages/pi-dsh-minimal)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+
 A [Pi](https://pi.dev) extension that maps Pi onto the official
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) **minimal**
 agent preset (极简模式).
+
+> DeepSeek V4 Pro's model card evaluates code-agent tasks on Harness **minimal**.
+> On that surface the first thinking line is typically **We need…** / **I need…**.
+> On a richer tool catalog it falls into **Let me…**. This package remaps Pi onto
+> that official two-tool surface.
+
+```sh
+pi install npm:pi-dsh-minimal
+```
+
+<p align="center">
+  <img src="docs/card.svg" alt="We need… not Let me…" width="800">
+</p>
 
 This is a community project. It is not an official DeepSeek or Pi preset and is
 not affiliated with or endorsed by DeepSeek.
@@ -137,6 +154,15 @@ npm run live:trajectory   # needs a configured DeepSeek V4 Pro model
 - The extension performs no network requests and adds no telemetry.
 - Review the files before installing. Persistent bash has the same trust
   level as Pi's built-in shell.
+
+## Related
+
+| Project | Host | Surface |
+| --- | --- | --- |
+| [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard) | DeepSeek Harness | Two-phase: minimal bootstrap, then Standard tools |
+| [pi-deepseek-anchor](https://github.com/kxh4892636/pi-deepseek-anchor) | Pi | Port of that two-phase preset |
+| [pi-dsh](https://github.com/fatwang2/pi-dsh) | Pi | Runs DSH as a provider inside Pi |
+| **pi-dsh-minimal** | Pi | Permanent official minimal (the HF eval setup) |
 
 ## License
 

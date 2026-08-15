@@ -2,9 +2,25 @@
 
 [English](./README.md)
 
+[![npm](https://img.shields.io/npm/v/pi-dsh-minimal.svg)](https://www.npmjs.com/package/pi-dsh-minimal)
+[![pi.dev](https://img.shields.io/badge/pi.dev-package-111111)](https://pi.dev/packages/pi-dsh-minimal)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+
 这是一个 [Pi](https://pi.dev) 扩展：把 Pi 的提示词和工具面映射成
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 官方
 **minimal（极简模式）** 预设。
+
+> DeepSeek V4 Pro 的模型卡在代码 Agent 任务上用的是 Harness **极简模式**。
+> 这套表面上思维链首行通常是 **We need…** / **I need…**；工具目录一变丰富，
+> 就会落到 **Let me…**。本包装把 Pi 映射到那套官方双工具表面。
+
+```sh
+pi install npm:pi-dsh-minimal
+```
+
+<p align="center">
+  <img src="docs/card.svg" alt="We need… not Let me…" width="800">
+</p>
 
 这是社区项目，并非 DeepSeek 或 Pi 官方预设，也不代表 DeepSeek 的认可或背书。
 
@@ -128,6 +144,15 @@ npm run live:trajectory   # 需要已配置 DeepSeek V4 Pro
   线上请求的最后防线。
 - 扩展不发起网络请求，也不增加遥测。
 - 安装前请自行审阅文件。持久 bash 与 Pi 内置 shell 具有相同信任等级。
+
+## 相关项目
+
+| 项目 | 宿主 | 表面 |
+| --- | --- | --- |
+| [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard) | DeepSeek Harness | 两阶段：先极简锚定，再晋升 Standard |
+| [pi-deepseek-anchor](https://github.com/kxh4892636/pi-deepseek-anchor) | Pi | 上述两阶段 preset 的 Pi 移植 |
+| [pi-dsh](https://github.com/fatwang2/pi-dsh) | Pi | 在 Pi 里把 DSH 当成 provider 跑 |
+| **pi-dsh-minimal** | Pi | 全程官方极简（HF 评测配置） |
 
 ## 许可证
 

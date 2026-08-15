@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="pi-dsh-minimal: We need, not Let me">
+  <rect width="1280" height="640" fill="#0b0f14"/>
+  <rect x="48" y="48" width="1184" height="544" rx="24" fill="#121821" stroke="#243044"/>
+  <text x="96" y="160" font-family="DejaVu Sans, sans-serif" font-size="28" fill="#7aa2f7">pi-dsh-minimal</text>
+  <text x="96" y="280" font-family="DejaVu Sans, sans-serif" font-size="72" font-weight="700" fill="#9ece6a">We need…</text>
+  <text x="96" y="370" font-family="DejaVu Sans, sans-serif" font-size="48" fill="#565f89">not Let me…</text>
+  <text x="96" y="470" font-family="DejaVu Sans Mono, monospace" font-size="26" fill="#a9b1d6">official DeepSeek Harness minimal mode, inside Pi</text>
+  <text x="96" y="520" font-family="DejaVu Sans Mono, monospace" font-size="22" fill="#7aa2f7">pi install npm:pi-dsh-minimal</text>
+</svg>
