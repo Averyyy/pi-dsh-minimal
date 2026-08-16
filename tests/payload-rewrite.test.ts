@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { extractRequestSurface, rewriteMinimalProviderRequest } from "../src/adapter/payload-rewrite.ts";
+import { extractRequestSurface, rewriteMinimalProviderRequest, rewriteProviderRequest } from "../src/adapter/payload-rewrite.ts";
+import { WEAK_FLASH } from "../src/routing/core.ts";
 import {
 	DSH_BASH_PARAMETERS,
 	DSH_STR_REPLACE_EDITOR_PARAMETERS,
@@ -65,4 +66,33 @@ test("rewriteMinimalProviderRequest maps Anthropic-style tool schemas", () => {
 		["bash", "str_replace_editor"],
 	);
 	assert.deepEqual(tools[0]?.input_schema, DSH_BASH_PARAMETERS);
+});
+
+test("promoted Pro rewrites persona but leaves Pi tools", () => {
+	const rewritten = rewriteProviderRequest(
+		{
+			system: "Pi default prompt",
+			tools: [
+				{ type: "function", function: { name: "read", parameters: { type: "object" } } },
+				{ type: "function", function: { name: "bash", parameters: { type: "object" } } },
+			],
+		},
+		{ persona: MINIMAL_PROMPT, rewriteTools: false },
+	);
+	const surface = extractRequestSurface(rewritten);
+	assert.equal(surface.system, MINIMAL_PROMPT);
+	assert.deepEqual(surface.toolNames, ["read", "bash"]);
+});
+
+test("Flash rewrite swaps in the weak Flash persona and keeps tools", () => {
+	const rewritten = rewriteProviderRequest(
+		{
+			system: "Pi default prompt",
+			tools: [{ type: "function", function: { name: "read", parameters: { type: "object" } } }],
+		},
+		{ persona: WEAK_FLASH, rewriteTools: false },
+	);
+	const surface = extractRequestSurface(rewritten);
+	assert.equal(surface.system, WEAK_FLASH);
+	assert.deepEqual(surface.toolNames, ["read"]);
 });

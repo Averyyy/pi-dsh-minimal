@@ -1,8 +1,17 @@
 import { getSettingsListTheme, type ExtensionContext, type Theme } from "@earendil-works/pi-coding-agent";
 import { SettingsList, truncateToWidth, type SettingItem } from "@earendil-works/pi-tui";
-import { DEFAULT_DSH_MINIMAL_CONFIG, type DshMinimalConfig } from "../adapter/config.ts";
-import { contextModel, describeModel, modelMatchesPatterns } from "../adapter/model.ts";
+import {
+	cloneConfig,
+	DEFAULT_DSH_MINIMAL_CONFIG,
+	DEFAULT_FLASH_PATTERNS,
+	DEFAULT_MODEL_PATTERNS,
+	type DshMinimalConfig,
+} from "../adapter/config.ts";
+import { contextModel, describeModel, isDeepSeekV4FlashModel, modelMatchesPatterns } from "../adapter/model.ts";
+import { resolveAdapterProfile } from "../adapter/profile.ts";
+import { normalizePromoteOn, type PromoteOn } from "../adapter/promotion.ts";
 import { CHANGELOG_URL, GITHUB_URL, HF_MODEL_CARD_URL, ISSUE_URL, openExternalUrl } from "./links.ts";
+import type { FlashRouting } from "../routing/core.ts";
 
 export interface DshSettingsScreenOptions {
 	initialConfig: DshMinimalConfig;
@@ -14,6 +23,8 @@ export interface DshSettingsScreenOptions {
 type SettingsTab = "general" | "models" | "about";
 
 const TAB_ORDER: readonly SettingsTab[] = ["general", "models", "about"];
+const PROMOTE_VALUES: PromoteOn[] = ["either", "tool-call", "assistant-message"];
+const ROUTING_VALUES: FlashRouting[] = ["weak", "auto", "spec", "react"];
 
 export async function openDshSettingsScreen(ctx: ExtensionContext, options: DshSettingsScreenOptions): Promise<void> {
 	let draft = cloneConfig(options.initialConfig);
@@ -61,10 +72,6 @@ export async function openDshSettingsScreen(ctx: ExtensionContext, options: DshS
 	});
 }
 
-function cloneConfig(config: DshMinimalConfig): DshMinimalConfig {
-	return { ...config, modelPatterns: [...config.modelPatterns] };
-}
-
 function rule(width: number, theme: Theme, color: "accent" | "borderMuted"): string {
 	return theme.fg(color, "─".repeat(Math.max(0, width)));
 }
@@ -81,7 +88,7 @@ function createSettingsList(
 	let settingsList: SettingsList;
 	settingsList = new SettingsList(
 		buildItems(tab, draft, currentModel),
-		10,
+		12,
 		getSettingsListTheme(),
 		(id, value) => {
 			const nextDraft = applySettingChange(id, value, draft, currentModel);
@@ -110,30 +117,46 @@ function buildItems(
 	if (tab === "about") return [];
 
 	if (tab === "models") {
-		const currentId = currentModel?.id?.trim();
-		const items: SettingItem[] = draft.modelPatterns.map((pattern, index) => ({
-			id: `pattern:${index}`,
-			label: pattern,
-			currentValue: "keep",
-			values: ["keep", "remove"],
-			description: "Cycle to remove this trigger pattern.",
-		}));
-		if (currentId && !draft.modelPatterns.some((pattern) => pattern === currentId)) {
+		const items: SettingItem[] = [];
+		for (const [index, pattern] of draft.modelPatterns.entries()) {
 			items.push({
-				id: "addCurrent",
-				label: "Add current model",
-				currentValue: "no",
-				values: ["no", "yes"],
-				description: `Add ${describeModel(currentModel)} to the trigger list.`,
+				id: `pro:${index}`,
+				label: `Pro  ${pattern}`,
+				currentValue: "keep",
+				values: ["keep", "remove"],
+				description: "Cycle to remove this V4 Pro trigger pattern.",
 			});
+		}
+		for (const [index, pattern] of draft.flashPatterns.entries()) {
+			items.push({
+				id: `flash:${index}`,
+				label: `Flash  ${pattern}`,
+				currentValue: "keep",
+				values: ["keep", "remove"],
+				description: "Cycle to remove this V4 Flash trigger pattern.",
+			});
+		}
+		const currentId = currentModel?.id?.trim();
+		if (currentId) {
+			const inPro = draft.modelPatterns.includes(currentId);
+			const inFlash = draft.flashPatterns.includes(currentId);
+			if (!inPro && !inFlash) {
+				items.push({
+					id: "addCurrent",
+					label: "Add current model",
+					currentValue: "no",
+					values: ["no", "yes"],
+					description: `Add ${describeModel(currentModel)} to the matching family.`,
+				});
+			}
 		}
 		if (items.length === 0) {
 			items.push({
 				id: "restoreDefault",
-				label: "Restore default pattern",
+				label: "Restore default patterns",
 				currentValue: "no",
 				values: ["no", "yes"],
-				description: "Restore deepseek-v4-pro as the default trigger.",
+				description: "Restore deepseek-v4-pro and deepseek-v4-flash.",
 			});
 		}
 		return items;
@@ -146,7 +169,21 @@ function buildItems(
 			label: "Use on all models",
 			currentValue: draft.useOnAllModels ? "on" : "off",
 			values: ["off", "on"],
-			description: "When off, only models matching the Models tab patterns are remapped.",
+			description: "Unknown models use the Pro (anchored) profile. Flash patterns still win.",
+		},
+		{
+			id: "promoteOn",
+			label: "Pro promote on",
+			currentValue: draft.promoteOn,
+			values: [...PROMOTE_VALUES],
+			description: "After this signal, Pro restores Pi's original tools. Default: either.",
+		},
+		{
+			id: "flashRouting",
+			label: "Flash routing",
+			currentValue: draft.flashRouting,
+			values: [...ROUTING_VALUES],
+			description: "weak = model self-classifies (measured default). auto = keyword classifier.",
 		},
 		{ id: "statusLine", label: "Statusline", currentValue: draft.statusLine ? "on" : "off", values: ["off", "on"] },
 	];
@@ -162,17 +199,33 @@ function applySettingChange(
 	if (id === "enabled") next.enabled = value === "on";
 	if (id === "useOnAllModels") next.useOnAllModels = value === "on";
 	if (id === "statusLine") next.statusLine = value === "on";
+	if (id === "promoteOn") next.promoteOn = normalizePromoteOn(value);
+	if (id === "flashRouting" && (ROUTING_VALUES as readonly string[]).includes(value)) {
+		next.flashRouting = value as FlashRouting;
+	}
 	if (id === "addCurrent" && value === "yes" && currentModel?.id) {
-		next.modelPatterns = [...new Set([...next.modelPatterns, currentModel.id])];
+		if (isDeepSeekV4FlashModel(currentModel)) {
+			next.flashPatterns = [...new Set([...next.flashPatterns, currentModel.id])];
+		} else {
+			next.modelPatterns = [...new Set([...next.modelPatterns, currentModel.id])];
+		}
 	}
 	if (id === "restoreDefault" && value === "yes") {
-		next.modelPatterns = [...DEFAULT_DSH_MINIMAL_CONFIG.modelPatterns];
+		next.modelPatterns = [...DEFAULT_MODEL_PATTERNS];
+		next.flashPatterns = [...DEFAULT_FLASH_PATTERNS];
 	}
-	if (id.startsWith("pattern:") && value === "remove") {
-		const index = Number(id.slice("pattern:".length));
+	if (id.startsWith("pro:") && value === "remove") {
+		const index = Number(id.slice("pro:".length));
 		if (Number.isInteger(index) && index >= 0 && index < next.modelPatterns.length) {
 			next.modelPatterns.splice(index, 1);
 			if (next.modelPatterns.length === 0) next.modelPatterns = [...DEFAULT_DSH_MINIMAL_CONFIG.modelPatterns];
+		}
+	}
+	if (id.startsWith("flash:") && value === "remove") {
+		const index = Number(id.slice("flash:".length));
+		if (Number.isInteger(index) && index >= 0 && index < next.flashPatterns.length) {
+			next.flashPatterns.splice(index, 1);
+			if (next.flashPatterns.length === 0) next.flashPatterns = [...DEFAULT_DSH_MINIMAL_CONFIG.flashPatterns];
 		}
 	}
 	return next;
@@ -185,7 +238,7 @@ function formatTabs(activeTab: SettingsTab, theme: Theme): string {
 
 function formatFooter(activeTab: SettingsTab): string {
 	if (activeTab === "about") return "  Tab to switch sections · g/c/h/i open links";
-	if (activeTab === "models") return "  Tab to switch sections · add patterns with /dsh match <pattern>";
+	if (activeTab === "models") return "  Tab · /dsh match <pro> · /dsh flash-match <flash>";
 	return "  Tab to switch sections";
 }
 
@@ -194,11 +247,14 @@ function formatModelNotes(
 	draft: DshMinimalConfig,
 	currentModel: ReturnType<typeof contextModel>,
 ): string[] {
-	const matches = draft.useOnAllModels || modelMatchesPatterns(currentModel, draft.modelPatterns);
+	const profile = resolveAdapterProfile({ model: currentModel }, draft);
 	return [
 		theme.fg("dim", `  Current model: ${describeModel(currentModel)}`),
-		theme.fg("dim", `  Trigger now: ${draft.enabled ? (matches ? "yes" : "no") : "disabled"}`),
-		theme.fg("dim", "  Default trigger is DeepSeek V4 Pro. /dsh match adds a custom pattern."),
+		theme.fg("dim", `  Active profile: ${draft.enabled ? profile : "disabled"}`),
+		theme.fg(
+			"dim",
+			`  Pro match: ${modelMatchesPatterns(currentModel, draft.modelPatterns) ? "yes" : "no"} · Flash match: ${modelMatchesPatterns(currentModel, draft.flashPatterns) ? "yes" : "no"}`,
+		),
 	];
 }
 

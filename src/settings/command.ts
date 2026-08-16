@@ -1,18 +1,38 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { readDshMinimalConfig, writeDshMinimalConfig, type DshMinimalConfig } from "../adapter/config.ts";
+import {
+	DEFAULT_FLASH_PATTERNS,
+	DEFAULT_MODEL_PATTERNS,
+	normalizeFlashRouting,
+	readDshMinimalConfig,
+	writeDshMinimalConfig,
+	type DshMinimalConfig,
+} from "../adapter/config.ts";
 import { syncAdapter } from "../adapter/activation.ts";
+import { normalizePromoteOn } from "../adapter/promotion.ts";
 import type { AdapterState } from "../adapter/state.ts";
 import { openDshSettingsScreen } from "./ui.ts";
 
-const DSH_COMMAND_COMPLETIONS = ["on", "off", "all", "status", "models", "match", "unmatch"] as const;
+const DSH_COMMAND_COMPLETIONS = [
+	"on",
+	"off",
+	"all",
+	"status",
+	"models",
+	"match",
+	"unmatch",
+	"flash-match",
+	"flash-unmatch",
+	"promote",
+	"routing",
+] as const;
 const DSH_USAGE =
-	"Usage: /dsh, /dsh on|off, /dsh all, /dsh status, /dsh models, /dsh match <pattern>, /dsh unmatch <pattern>";
+	"Usage: /dsh, /dsh on|off, /dsh all, /dsh status, /dsh models, /dsh match <pattern>, /dsh unmatch <pattern>, /dsh flash-match <pattern>, /dsh flash-unmatch <pattern>, /dsh promote either|tool-call|assistant-message, /dsh routing weak|auto|spec|react";
 
 export function registerDshCommand(pi: ExtensionAPI, state: AdapterState): void {
 	function saveAndApply(ctx: ExtensionContext, nextConfig: DshMinimalConfig): boolean {
 		const writeResult = writeDshMinimalConfig(nextConfig);
 		if (!writeResult.ok) {
-			ctx.ui.notify(`Failed to save dsh minimal settings: ${writeResult.error}`, "error");
+			ctx.ui.notify(`Failed to save dsh settings: ${writeResult.error}`, "error");
 			return false;
 		}
 		state.config = nextConfig;
@@ -21,7 +41,7 @@ export function registerDshCommand(pi: ExtensionAPI, state: AdapterState): void 
 	}
 
 	pi.registerCommand("dsh", {
-		description: "Configure DeepSeek Harness minimal-mode adapter",
+		description: "Configure DeepSeek Harness adapter (Pro anchored-standard / Flash routing)",
 		getArgumentCompletions: (prefix) => {
 			const trimmed = prefix.trim().toLowerCase();
 			const [head] = trimmed.split(/\s+/, 1);
@@ -49,9 +69,16 @@ export function registerDshCommand(pi: ExtensionAPI, state: AdapterState): void 
 				saveAndApply(ctx, { ...state.config, statusLine: !state.config.statusLine });
 				return;
 			}
-			if (head === "match") {
+			if (head === "match" || head === "flash-match") {
 				if (!restText) {
-					ctx.ui.notify("Usage: /dsh match <pattern>", "warning");
+					ctx.ui.notify(`Usage: /dsh ${head} <pattern>`, "warning");
+					return;
+				}
+				if (head === "flash-match") {
+					saveAndApply(ctx, {
+						...state.config,
+						flashPatterns: [...new Set([...state.config.flashPatterns, restText])],
+					});
 					return;
 				}
 				saveAndApply(ctx, {
@@ -60,16 +87,40 @@ export function registerDshCommand(pi: ExtensionAPI, state: AdapterState): void 
 				});
 				return;
 			}
-			if (head === "unmatch") {
+			if (head === "unmatch" || head === "flash-unmatch") {
 				if (!restText) {
-					ctx.ui.notify("Usage: /dsh unmatch <pattern>", "warning");
+					ctx.ui.notify(`Usage: /dsh ${head} <pattern>`, "warning");
+					return;
+				}
+				if (head === "flash-unmatch") {
+					const nextPatterns = state.config.flashPatterns.filter((pattern) => pattern !== restText);
+					saveAndApply(ctx, {
+						...state.config,
+						flashPatterns: nextPatterns.length > 0 ? nextPatterns : [...DEFAULT_FLASH_PATTERNS],
+					});
 					return;
 				}
 				const nextPatterns = state.config.modelPatterns.filter((pattern) => pattern !== restText);
 				saveAndApply(ctx, {
 					...state.config,
-					modelPatterns: nextPatterns.length > 0 ? nextPatterns : ["deepseek-v4-pro"],
+					modelPatterns: nextPatterns.length > 0 ? nextPatterns : [...DEFAULT_MODEL_PATTERNS],
 				});
+				return;
+			}
+			if (head === "promote") {
+				if (!restText) {
+					ctx.ui.notify("Usage: /dsh promote either|tool-call|assistant-message", "warning");
+					return;
+				}
+				saveAndApply(ctx, { ...state.config, promoteOn: normalizePromoteOn(restText) });
+				return;
+			}
+			if (head === "routing") {
+				if (!restText) {
+					ctx.ui.notify("Usage: /dsh routing weak|auto|spec|react", "warning");
+					return;
+				}
+				saveAndApply(ctx, { ...state.config, flashRouting: normalizeFlashRouting(restText) });
 				return;
 			}
 			if (head === "models") {
@@ -101,5 +152,12 @@ export function registerDshCommand(pi: ExtensionAPI, state: AdapterState): void 
 }
 
 export function formatDshSettings(config: DshMinimalConfig): string {
-	return `dsh minimal: ${config.enabled ? "on" : "off"}, all models ${config.useOnAllModels ? "on" : "off"}, statusline ${config.statusLine ? "on" : "off"}, match ${config.modelPatterns.join(", ")}`;
+	return [
+		`dsh: ${config.enabled ? "on" : "off"}`,
+		`all models ${config.useOnAllModels ? "on" : "off"}`,
+		`promote ${config.promoteOn}`,
+		`flash routing ${config.flashRouting}`,
+		`pro ${config.modelPatterns.join(", ")}`,
+		`flash ${config.flashPatterns.join(", ")}`,
+	].join(", ");
 }

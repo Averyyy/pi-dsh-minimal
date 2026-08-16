@@ -1,10 +1,9 @@
-pi-dsh-minimal ports the official DeepSeek Harness `minimal` agent
-preset's model-facing surface from:
+pi-dsh-minimal ports model-facing surfaces from:
 
   https://github.com/deepseek-ai/deepseek-harness
   commit 47f943859bef60e4160492346772ded9b24f765a
 
-That surface is:
+That official `minimal` surface is:
 
   - the complete system prompt
     `You are a helpful software engineer assistant.`
@@ -13,6 +12,20 @@ That surface is:
 
 including the official tool descriptions, JSON parameter schemas, and
 the editor's view / create / str_replace / insert result strings.
+
+The V4 Pro two-phase schedule follows the measured
+`dsh-anchored-standard` bootstrap (first request = official two-tool
+schema, later requests restore the host catalog after a durable
+promotion signal):
+
+  https://github.com/xiaobright/dsh-anchored-standard
+
+The V4 Flash persona, classify/converge guidance, and chat stand-down
+follow `dsh-mode-boost` / `dsh-router-standard` (weak band):
+
+  https://github.com/yjh051108/dsh-mode-boost
+  https://github.com/yjh051108/dsh-router-standard
+  https://github.com/yjh051108/dsh-routing-suite
 
 DeepSeek Harness is distributed under the MIT License:
 

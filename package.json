@@ -1,7 +1,7 @@
 {
   "name": "pi-dsh-minimal",
-  "version": "0.1.0",
-  "description": "DeepSeek Harness minimal-mode adapter for Pi: official two-tool surface and fixed persona, defaulting to DeepSeek V4 Pro",
+  "version": "0.2.0",
+  "description": "DeepSeek Harness adapter for Pi: V4 Pro anchored-standard (first-turn two-tool schema, then Pi tools) and V4 Flash weak routing + mode-boost",
   "type": "module",
   "repository": {
     "type": "git",
@@ -19,8 +19,10 @@
     "deepseek",
     "dsh",
     "minimal",
+    "anchored-standard",
     "deepseek-harness",
-    "deepseek-v4-pro"
+    "deepseek-v4-pro",
+    "deepseek-v4-flash"
   ],
   "license": "MIT",
   "author": "Averyyy",
@@ -36,13 +38,18 @@
     "README.zh-CN.md",
     "LICENSE",
     "NOTICE",
-    "scripts/live-trajectory.mjs"
+    "scripts/live-trajectory.mjs",
+    "scripts/live-promote.mjs",
+    "scripts/live-flash.mjs",
+    "scripts/live-harness.mjs"
   ],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "tsx --test tests/**/*.test.ts",
     "check": "npm run typecheck && npm run test",
     "live:trajectory": "node scripts/live-trajectory.mjs",
+    "live:promote": "node scripts/live-promote.mjs",
+    "live:flash": "node scripts/live-flash.mjs",
     "prepack": "npm run check"
   },
   "publishConfig": {

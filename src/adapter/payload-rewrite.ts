@@ -1,4 +1,5 @@
 import { DSH_MINIMAL_TOOLS, MINIMAL_PROMPT } from "../dsh/official.ts";
+import { isGuideText } from "../routing/core.ts";
 
 function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -48,16 +49,16 @@ function rewriteTools(tools: unknown): unknown {
 	return exactChatCompletionsTools();
 }
 
-function rewriteInstructionContent(content: unknown): unknown {
-	if (typeof content === "string") return MINIMAL_PROMPT;
-	if (!Array.isArray(content)) return MINIMAL_PROMPT;
+function rewriteInstructionContent(content: unknown, persona: string): unknown {
+	if (typeof content === "string") return persona;
+	if (!Array.isArray(content)) return persona;
 	if (content.length === 1 && isObject(content[0]) && content[0].type === "text") {
-		return [{ ...content[0], text: MINIMAL_PROMPT }];
+		return [{ ...content[0], text: persona }];
 	}
-	return MINIMAL_PROMPT;
+	return persona;
 }
 
-function rewriteMessages(messages: unknown): unknown {
+function rewriteMessages(messages: unknown, persona: string): unknown {
 	if (!Array.isArray(messages)) return messages;
 	let replaced = false;
 	return messages.map((message) => {
@@ -65,30 +66,48 @@ function rewriteMessages(messages: unknown): unknown {
 		const role = message.role;
 		if (role !== "system" && role !== "developer") return message;
 		replaced = true;
-		return { ...message, content: rewriteInstructionContent(message.content) };
+		return { ...message, content: rewriteInstructionContent(message.content, persona) };
 	});
 }
 
-export function rewriteMinimalProviderRequest(payload: unknown): unknown {
+export interface RewriteOptions {
+	persona: string;
+	rewriteTools: boolean;
+}
+
+export function rewriteProviderRequest(payload: unknown, options: RewriteOptions): unknown {
 	if (!isObject(payload)) return payload;
 	const next: Record<string, unknown> = { ...payload };
 	if ("system" in next && (typeof next.system === "string" || Array.isArray(next.system))) {
-		next.system = rewriteInstructionContent(next.system);
+		next.system = rewriteInstructionContent(next.system, options.persona);
 	}
 	if ("instructions" in next && typeof next.instructions === "string") {
-		next.instructions = MINIMAL_PROMPT;
+		next.instructions = options.persona;
 	}
 	if ("messages" in next) {
-		next.messages = rewriteMessages(next.messages);
+		next.messages = rewriteMessages(next.messages, options.persona);
 	}
-	next.tools = rewriteTools(next.tools);
+	if (options.rewriteTools) next.tools = rewriteTools(next.tools);
 	return next;
+}
+
+export function rewriteMinimalProviderRequest(payload: unknown): unknown {
+	return rewriteProviderRequest(payload, { persona: MINIMAL_PROMPT, rewriteTools: true });
+}
+
+function messageText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.map((part) => (isObject(part) && typeof part.text === "string" ? part.text : ""))
+		.join("");
 }
 
 export function extractRequestSurface(payload: unknown): {
 	system?: string;
 	toolNames: string[];
 	tools: unknown;
+	lastUser?: string;
 } {
 	if (!isObject(payload)) return { toolNames: [], tools: undefined };
 	let system: string | undefined;
@@ -99,6 +118,18 @@ export function extractRequestSurface(payload: unknown): {
 			(message) => isObject(message) && (message.role === "system" || message.role === "developer"),
 		);
 		if (isObject(first) && typeof first.content === "string") system = first.content;
+	}
+	let lastUser: string | undefined;
+	if (Array.isArray(payload.messages)) {
+		for (let index = payload.messages.length - 1; index >= 0; index--) {
+			const message = payload.messages[index];
+			if (!isObject(message) || message.role !== "user") continue;
+			const text = messageText(message.content);
+			if (text.trim()) {
+				lastUser = text;
+				break;
+			}
+		}
 	}
 	const tools = payload.tools;
 	const toolNames: string[] = [];
@@ -112,5 +143,29 @@ export function extractRequestSurface(payload: unknown): {
 			}
 		}
 	}
-	return { system, toolNames, tools };
+	const messageRoles: string[] = [];
+	if (Array.isArray(payload.messages)) {
+		for (const message of payload.messages) {
+			if (isObject(message) && typeof message.role === "string") messageRoles.push(message.role);
+		}
+	}
+	return { system, toolNames, tools, lastUser, messageRoles };
+}
+
+export function countUserRounds(messages: readonly { role?: string; content?: unknown }[]): number {
+	let rounds = 0;
+	for (const message of messages) {
+		if (message.role !== "user") continue;
+		const text = typeof message.content === "string" ? message.content : "";
+		const extracted =
+			text ||
+			(Array.isArray(message.content)
+				? message.content
+						.map((part) => (part && typeof part === "object" && "text" in part ? String(part.text ?? "") : ""))
+						.join(" ")
+				: "");
+		if (!extracted.trim() || isGuideText(extracted)) continue;
+		rounds += 1;
+	}
+	return rounds;
 }

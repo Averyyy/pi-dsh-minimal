@@ -1,18 +1,72 @@
 import { writeFileSync } from "node:fs";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { readDshMinimalConfig } from "./adapter/config.ts";
-import { shouldUseAdapter, syncAdapter } from "./adapter/activation.ts";
-import { rewriteMinimalProviderRequest, extractRequestSurface } from "./adapter/payload-rewrite.ts";
-import { minimalSystemPrompt } from "./adapter/prompt.ts";
-import type { AdapterState } from "./adapter/state.ts";
+import { resolveAdapterProfile, shouldUseAdapter, syncAdapter } from "./adapter/activation.ts";
+import { injectFlashGuidance } from "./adapter/guidance.ts";
+import { modelIdHint } from "./adapter/model.ts";
+import { extractRequestSurface, rewriteProviderRequest } from "./adapter/payload-rewrite.ts";
+import { flashSystemPrompt, minimalSystemPrompt } from "./adapter/prompt.ts";
+import { isPromoted, scanSessionPhase } from "./adapter/promotion.ts";
+import { emptySessionPhase, type AdapterState } from "./adapter/state.ts";
+import { restoreTools, stripOwnedTools } from "./adapter/tool-set.ts";
+import { isChatTask, routingMode } from "./routing/core.ts";
+import { registerDshCommand } from "./settings/command.ts";
 import { createPersistentBashSession } from "./tools/bash-session.ts";
 import { registerStrReplaceEditorTool } from "./tools/str-replace-editor.ts";
-import { registerDshCommand } from "./settings/command.ts";
-import { restoreTools, stripOwnedTools } from "./adapter/tool-set.ts";
 
 function dumpPath(): string | undefined {
 	const value = process.env.PI_DSH_MINIMAL_DUMP;
 	return value && value.length > 0 ? value : undefined;
+}
+
+function sessionEntries(ctx: ExtensionContext) {
+	try {
+		return ctx.sessionManager.buildContextEntries();
+	} catch {
+		try {
+			return ctx.sessionManager.getEntries();
+		} catch {
+			return [];
+		}
+	}
+}
+
+function refreshPhase(pi: ExtensionAPI, ctx: ExtensionContext, state: AdapterState): void {
+	const scan = scanSessionPhase(sessionEntries(ctx), state.config.promoteOn);
+	if (scan.firstUserText && !state.phase.firstUserText) state.phase.firstUserText = scan.firstUserText;
+	state.phase.userRounds = Math.max(state.phase.userRounds, scan.userRounds);
+	state.phase.hasAssistant = state.phase.hasAssistant || scan.hasAssistant;
+	state.phase.hasTool = state.phase.hasTool || scan.hasTool;
+	state.phase.compactionSeq = scan.compactionSeq;
+
+	const profile = resolveAdapterProfile(ctx, state.config);
+	state.phase.profile = profile;
+	if (profile === "flash" && state.phase.firstUserText) {
+		state.phase.mode = routingMode(state.config.flashRouting, state.phase.firstUserText);
+		if (!state.phase.hasAssistant && !state.phase.hasTool) {
+			state.phase.chatStandDown = isChatTask(state.phase.firstUserText);
+		}
+	} else if (profile !== "flash") {
+		state.phase.chatStandDown = false;
+	}
+	state.phase.promoted = profile === "pro" && isPromoted(state.phase, state.config.promoteOn);
+	syncAdapter(pi, ctx, state);
+}
+
+function noteUserText(state: AdapterState, text: string | undefined): void {
+	const trimmed = text?.trim();
+	if (!trimmed) return;
+	if (!state.phase.firstUserText) state.phase.firstUserText = trimmed;
+	if (state.phase.userRounds === 0) state.phase.userRounds = 1;
+}
+
+function noteAssistant(state: AdapterState, message: AgentMessage | undefined): void {
+	if (!message || message.role !== "assistant") return;
+	state.phase.hasAssistant = true;
+	if (Array.isArray(message.content) && message.content.some((part) => part?.type === "toolCall")) {
+		state.phase.hasTool = true;
+	}
 }
 
 export default function dshMinimal(pi: ExtensionAPI) {
@@ -22,6 +76,8 @@ export default function dshMinimal(pi: ExtensionAPI) {
 		config: readDshMinimalConfig(),
 		shell: createPersistentBashSession(process.cwd()),
 		bashOverrideInstalled: false,
+		surface: "off",
+		phase: emptySessionPhase(),
 	};
 
 	registerStrReplaceEditorTool(pi);
@@ -31,33 +87,89 @@ export default function dshMinimal(pi: ExtensionAPI) {
 		state.cwd = ctx.cwd;
 		state.shell.setCwd(ctx.cwd);
 		state.config = readDshMinimalConfig();
-		syncAdapter(pi, ctx, state);
+		state.phase = emptySessionPhase();
+		refreshPhase(pi, ctx, state);
 	});
 
 	pi.on("model_select", async (_event, ctx) => {
 		state.cwd = ctx.cwd;
 		state.shell.setCwd(ctx.cwd);
-		syncAdapter(pi, ctx, state);
+		refreshPhase(pi, ctx, state);
+	});
+
+	pi.on("session_compact", async (_event, ctx) => {
+		state.phase.hasAssistant = false;
+		state.phase.hasTool = false;
+		state.phase.promoted = false;
+		refreshPhase(pi, ctx, state);
 	});
 
 	pi.on("session_shutdown", async () => {
 		await state.shell.reset("session shutdown");
 	});
 
-	pi.on("before_agent_start", async (_event, ctx) => {
-		if (!shouldUseAdapter(ctx, state.config)) return undefined;
-		syncAdapter(pi, ctx, state);
+	pi.on("input", async (event) => {
+		noteUserText(state, event.text);
+		return undefined;
+	});
+
+	pi.on("before_agent_start", async (event, ctx) => {
+		noteUserText(state, event.prompt);
+		refreshPhase(pi, ctx, state);
+		if (state.phase.profile === "inactive") return undefined;
+		if (state.phase.profile === "flash") {
+			if (state.phase.chatStandDown) return undefined;
+			return { systemPrompt: flashSystemPrompt(state.phase.mode, modelIdHint(ctx.model)) };
+		}
 		return { systemPrompt: minimalSystemPrompt() };
 	});
 
+	pi.on("message_end", async (event, ctx) => {
+		noteAssistant(state, event.message);
+		if (state.phase.hasAssistant || state.phase.hasTool) refreshPhase(pi, ctx, state);
+	});
+
+	pi.on("tool_call", async (_event, ctx) => {
+		state.phase.hasTool = true;
+		refreshPhase(pi, ctx, state);
+	});
+
+	pi.on("context", async (event, ctx) => {
+		refreshPhase(pi, ctx, state);
+		if (state.phase.profile !== "flash" || state.phase.chatStandDown) return undefined;
+		const next = injectFlashGuidance(event.messages, modelIdHint(ctx.model));
+		return next ? { messages: next } : undefined;
+	});
+
 	pi.on("before_provider_request", async (event, ctx) => {
-		if (!shouldUseAdapter(ctx, state.config)) return undefined;
-		syncAdapter(pi, ctx, state);
-		const rewritten = rewriteMinimalProviderRequest(event.payload);
+		refreshPhase(pi, ctx, state);
+		if (state.phase.profile === "inactive") return undefined;
+		if (state.phase.profile === "flash" && state.phase.chatStandDown) return undefined;
+
+		const persona =
+			state.phase.profile === "flash"
+				? flashSystemPrompt(state.phase.mode, modelIdHint(ctx.model))
+				: minimalSystemPrompt();
+		const rewritten = rewriteProviderRequest(event.payload, {
+			persona,
+			rewriteTools: state.phase.profile === "pro" && !state.phase.promoted,
+		});
 		const dump = dumpPath();
 		if (dump) {
 			try {
-				writeFileSync(dump, `${JSON.stringify(extractRequestSurface(rewritten), null, 2)}\n`, "utf8");
+				const surface = extractRequestSurface(rewritten);
+				writeFileSync(
+					dump,
+					`${JSON.stringify({
+						profile: state.phase.profile,
+						promoted: state.phase.promoted,
+						surface: state.surface,
+						mode: state.phase.mode,
+						chatStandDown: state.phase.chatStandDown,
+						...surface,
+					})}\n`,
+					{ encoding: "utf8", flag: "a" },
+				);
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
 				console.warn(`[pi-dsh-minimal] Failed to dump request surface: ${message}`);
@@ -70,9 +182,12 @@ export default function dshMinimal(pi: ExtensionAPI) {
 export {
 	shouldUseAdapter,
 	syncAdapter,
-	rewriteMinimalProviderRequest,
+	resolveAdapterProfile,
+	rewriteProviderRequest,
 	extractRequestSurface,
 	restoreTools,
 	stripOwnedTools,
 	readDshMinimalConfig,
+	scanSessionPhase,
+	isPromoted,
 };

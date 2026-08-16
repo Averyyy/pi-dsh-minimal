@@ -115,7 +115,7 @@ writeFileSync(
 );
 writeFileSync(
 	join(isolated, "pi-dsh-minimal.json"),
-	`${JSON.stringify({ enabled: true, statusLine: false, useOnAllModels: false, modelPatterns: ["deepseek-v4-pro"] }, null, 2)}\n`,
+	`${JSON.stringify({ enabled: true, statusLine: false, useOnAllModels: false, modelPatterns: ["deepseek-v4-pro"], flashPatterns: ["deepseek-v4-flash"], promoteOn: "either", flashRouting: "weak" }, null, 2)}\n`,
 );
 
 console.log(`isolated dir: ${isolated}`);
@@ -141,14 +141,27 @@ if (result.stderr) writeFileSync(join(isolated, "stderr.log"), result.stderr);
 const events = parseEvents(result.stdout);
 const thinking = extractThinking(events);
 const { head, need, weStyle, letMe, userWants } = classify(thinking);
-let surface;
-if (existsSync(dump)) {
-	try {
-		surface = JSON.parse(readFileSync(dump, "utf8"));
-	} catch {
-		surface = undefined;
-	}
+function readDumpSurfaces(path) {
+	if (!existsSync(path)) return [];
+	return readFileSync(path, "utf8")
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.flatMap((line) => {
+			try {
+				return [JSON.parse(line)];
+			} catch {
+				try {
+					return [JSON.parse(readFileSync(path, "utf8"))];
+				} catch {
+					return [];
+				}
+			}
+		});
 }
+
+const surfaces = readDumpSurfaces(dump);
+const surface = surfaces[0];
 
 console.log("--- request surface ---");
 console.log(JSON.stringify(surface ?? "(no dump; extension may not have rewritten)", null, 2));
@@ -165,6 +178,14 @@ if (result.code !== 0 && !thinking) {
 if (surface) {
 	if (surface.system !== "You are a helpful software engineer assistant.") {
 		console.error("FAIL: system prompt is not the official minimal persona");
+		process.exit(1);
+	}
+	if (surface.profile && surface.profile !== "pro") {
+		console.error(`FAIL: profile was ${surface.profile}`);
+		process.exit(1);
+	}
+	if (surface.promoted === true) {
+		console.error("FAIL: first request was already promoted");
 		process.exit(1);
 	}
 	if (JSON.stringify(surface.toolNames) !== JSON.stringify(["bash", "str_replace_editor"])) {
