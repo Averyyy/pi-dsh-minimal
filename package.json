@@ -1,7 +1,7 @@
 {
   "name": "pi-dsh-minimal",
-  "version": "0.2.0",
-  "description": "DeepSeek Harness adapter for Pi: V4 Pro anchored-standard (first-turn two-tool schema, then Pi tools) and V4 Flash weak routing + mode-boost",
+  "version": "0.3.1",
+  "description": "DeepSeek Harness adapter for Pi: V4 Pro + V4 Flash on the anchored-standard surface (first-turn two-tool schema, then Pi tools). Measured on DeepSWE.",
   "type": "module",
   "repository": {
     "type": "git",
@@ -40,7 +40,6 @@
     "NOTICE",
     "scripts/live-trajectory.mjs",
     "scripts/live-promote.mjs",
-    "scripts/live-flash.mjs",
     "scripts/live-harness.mjs"
   ],
   "scripts": {
@@ -49,7 +48,6 @@
     "check": "npm run typecheck && npm run test",
     "live:trajectory": "node scripts/live-trajectory.mjs",
     "live:promote": "node scripts/live-promote.mjs",
-    "live:flash": "node scripts/live-flash.mjs",
     "prepack": "npm run check"
   },
   "publishConfig": {

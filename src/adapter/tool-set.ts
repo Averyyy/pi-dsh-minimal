@@ -2,7 +2,6 @@ import type { AdapterProfile } from "./profile.ts";
 
 export const STATUS_KEY = "dsh-minimal";
 export const STATUS_ANCHORED = "\u001b[38;2;74;222;128mdsh anchored\u001b[0m";
-export const STATUS_FLASH = "\u001b[38;2;56;189;248mdsh flash\u001b[0m";
 export const STATUS_TEXT = STATUS_ANCHORED;
 
 export const DEFAULT_TOOL_NAMES = ["read", "bash", "edit", "write"];
@@ -14,15 +13,12 @@ export function buildStatusText(options: {
 	profile: AdapterProfile;
 	promoted?: boolean;
 	useOnAllModels: boolean;
-	chatStandDown?: boolean;
 }): string | undefined {
 	if (options.profile === "inactive") return undefined;
-	const base = options.profile === "flash" ? STATUS_FLASH : STATUS_ANCHORED;
-	const bits = [base];
+	const bits = [STATUS_ANCHORED];
 	if (options.profile === "pro" && options.promoted) bits.push("promoted");
-	if (options.profile === "flash" && options.chatStandDown) bits.push("chat");
 	if (options.useOnAllModels) bits.push("all models");
-	return bits.length === 1 ? base : `${base} • ${bits.slice(1).join(" • ")}`;
+	return bits.length === 1 ? STATUS_ANCHORED : `${STATUS_ANCHORED} • ${bits.slice(1).join(" • ")}`;
 }
 
 export function mergeToolNames(...toolNameGroups: string[][]): string[] {

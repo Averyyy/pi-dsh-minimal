@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import type { FlashRouting } from "../routing/core.ts";
 import { normalizePromoteOn, type PromoteOn } from "./promotion.ts";
 
 export interface DshMinimalConfig {
@@ -10,25 +9,22 @@ export interface DshMinimalConfig {
 	useOnAllModels: boolean;
 	/** Pro (anchored-standard) trigger patterns. */
 	modelPatterns: string[];
-	/** Flash (weak + mode-boost) trigger patterns. */
-	flashPatterns: string[];
 	promoteOn: PromoteOn;
-	flashRouting: FlashRouting;
 }
 
 export const DSH_MINIMAL_CONFIG_BASENAME = "pi-dsh-minimal.json";
-export const DEFAULT_MODEL_PATTERNS = ["deepseek-v4-pro"];
-export const DEFAULT_FLASH_PATTERNS = ["deepseek-v4-flash"];
-export const FLASH_ROUTING_VALUES = ["weak", "auto", "spec", "react"] as const;
+// v0.3.1: flash joins pro by default — a controlled DeepSWE A/B measured
+// 9/10 vs 6/10 solved when flash runs the anchored-standard bootstrap
+// (runs/deepswe/RESULTS-flash-propath.md). The old weak-routing Flash
+// profile stays removed.
+export const DEFAULT_MODEL_PATTERNS = ["deepseek-v4-pro", "deepseek-v4-flash"];
 
 export const DEFAULT_DSH_MINIMAL_CONFIG: DshMinimalConfig = {
 	enabled: true,
 	statusLine: true,
 	useOnAllModels: false,
 	modelPatterns: [...DEFAULT_MODEL_PATTERNS],
-	flashPatterns: [...DEFAULT_FLASH_PATTERNS],
 	promoteOn: "either",
-	flashRouting: "weak",
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -52,17 +48,6 @@ export function normalizeModelPatterns(value: unknown): string[] {
 	return normalizePatternList(value, DEFAULT_MODEL_PATTERNS);
 }
 
-export function normalizeFlashPatterns(value: unknown): string[] {
-	return normalizePatternList(value, DEFAULT_FLASH_PATTERNS);
-}
-
-export function normalizeFlashRouting(value: unknown): FlashRouting {
-	if (typeof value === "string" && (FLASH_ROUTING_VALUES as readonly string[]).includes(value)) {
-		return value as FlashRouting;
-	}
-	return "weak";
-}
-
 export function getDshMinimalConfigPath(agentDir: string = getAgentDir()): string {
 	return join(agentDir, DSH_MINIMAL_CONFIG_BASENAME);
 }
@@ -82,9 +67,7 @@ export function readDshMinimalConfig(configPath: string = getDshMinimalConfigPat
 			useOnAllModels:
 				typeof parsed.useOnAllModels === "boolean" ? parsed.useOnAllModels : DEFAULT_DSH_MINIMAL_CONFIG.useOnAllModels,
 			modelPatterns: normalizeModelPatterns(parsed.modelPatterns),
-			flashPatterns: normalizeFlashPatterns(parsed.flashPatterns),
 			promoteOn: normalizePromoteOn(parsed.promoteOn),
-			flashRouting: normalizeFlashRouting(parsed.flashRouting),
 		};
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
@@ -112,6 +95,5 @@ export function cloneConfig(config: DshMinimalConfig): DshMinimalConfig {
 	return {
 		...config,
 		modelPatterns: [...config.modelPatterns],
-		flashPatterns: [...config.flashPatterns],
 	};
 }

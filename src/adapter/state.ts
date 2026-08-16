@@ -1,9 +1,8 @@
 import type { PersistentBashSession } from "../tools/bash-session.ts";
-import type { RouterMode } from "../routing/core.ts";
 import type { DshMinimalConfig } from "./config.ts";
 import type { AdapterProfile } from "./profile.ts";
 
-export type ToolSurface = "off" | "bootstrap" | "promoted" | "flash";
+export type ToolSurface = "off" | "bootstrap" | "promoted";
 
 export interface SessionPhase {
 	profile: AdapterProfile;
@@ -11,8 +10,6 @@ export interface SessionPhase {
 	compactionSeq: number;
 	firstUserText?: string;
 	userRounds: number;
-	chatStandDown: boolean;
-	mode: RouterMode;
 	hasAssistant: boolean;
 	hasTool: boolean;
 }
@@ -23,8 +20,6 @@ export function emptySessionPhase(): SessionPhase {
 		promoted: false,
 		compactionSeq: -1,
 		userRounds: 0,
-		chatStandDown: false,
-		mode: "weak",
 		hasAssistant: false,
 		hasTool: false,
 	};

@@ -3,14 +3,11 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { readDshMinimalConfig } from "./adapter/config.ts";
 import { resolveAdapterProfile, shouldUseAdapter, syncAdapter } from "./adapter/activation.ts";
-import { injectFlashGuidance } from "./adapter/guidance.ts";
-import { modelIdHint } from "./adapter/model.ts";
 import { extractRequestSurface, rewriteProviderRequest } from "./adapter/payload-rewrite.ts";
-import { flashSystemPrompt, minimalSystemPrompt } from "./adapter/prompt.ts";
+import { minimalSystemPrompt } from "./adapter/prompt.ts";
 import { isPromoted, scanSessionPhase } from "./adapter/promotion.ts";
 import { emptySessionPhase, type AdapterState } from "./adapter/state.ts";
 import { restoreTools, stripOwnedTools } from "./adapter/tool-set.ts";
-import { isChatTask, routingMode } from "./routing/core.ts";
 import { registerDshCommand } from "./settings/command.ts";
 import { createPersistentBashSession } from "./tools/bash-session.ts";
 import { registerStrReplaceEditorTool } from "./tools/str-replace-editor.ts";
@@ -42,14 +39,6 @@ function refreshPhase(pi: ExtensionAPI, ctx: ExtensionContext, state: AdapterSta
 
 	const profile = resolveAdapterProfile(ctx, state.config);
 	state.phase.profile = profile;
-	if (profile === "flash" && state.phase.firstUserText) {
-		state.phase.mode = routingMode(state.config.flashRouting, state.phase.firstUserText);
-		if (!state.phase.hasAssistant && !state.phase.hasTool) {
-			state.phase.chatStandDown = isChatTask(state.phase.firstUserText);
-		}
-	} else if (profile !== "flash") {
-		state.phase.chatStandDown = false;
-	}
 	state.phase.promoted = profile === "pro" && isPromoted(state.phase, state.config.promoteOn);
 	syncAdapter(pi, ctx, state);
 }
@@ -113,14 +102,10 @@ export default function dshMinimal(pi: ExtensionAPI) {
 		return undefined;
 	});
 
-	pi.on("before_agent_start", async (event, ctx) => {
-		noteUserText(state, event.prompt);
+	pi.on("before_agent_start", async (_event, ctx) => {
+		noteUserText(state, _event.prompt);
 		refreshPhase(pi, ctx, state);
 		if (state.phase.profile === "inactive") return undefined;
-		if (state.phase.profile === "flash") {
-			if (state.phase.chatStandDown) return undefined;
-			return { systemPrompt: flashSystemPrompt(state.phase.mode, modelIdHint(ctx.model)) };
-		}
 		return { systemPrompt: minimalSystemPrompt() };
 	});
 
@@ -134,24 +119,12 @@ export default function dshMinimal(pi: ExtensionAPI) {
 		refreshPhase(pi, ctx, state);
 	});
 
-	pi.on("context", async (event, ctx) => {
-		refreshPhase(pi, ctx, state);
-		if (state.phase.profile !== "flash" || state.phase.chatStandDown) return undefined;
-		const next = injectFlashGuidance(event.messages, modelIdHint(ctx.model));
-		return next ? { messages: next } : undefined;
-	});
-
 	pi.on("before_provider_request", async (event, ctx) => {
 		refreshPhase(pi, ctx, state);
 		if (state.phase.profile === "inactive") return undefined;
-		if (state.phase.profile === "flash" && state.phase.chatStandDown) return undefined;
 
-		const persona =
-			state.phase.profile === "flash"
-				? flashSystemPrompt(state.phase.mode, modelIdHint(ctx.model))
-				: minimalSystemPrompt();
 		const rewritten = rewriteProviderRequest(event.payload, {
-			persona,
+			persona: minimalSystemPrompt(),
 			rewriteTools: state.phase.profile === "pro" && !state.phase.promoted,
 		});
 		const dump = dumpPath();
@@ -164,8 +137,6 @@ export default function dshMinimal(pi: ExtensionAPI) {
 						profile: state.phase.profile,
 						promoted: state.phase.promoted,
 						surface: state.surface,
-						mode: state.phase.mode,
-						chatStandDown: state.phase.chatStandDown,
 						...surface,
 					})}\n`,
 					{ encoding: "utf8", flag: "a" },

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isDeepSeekV4FlashModel, isDeepSeekV4ProModel, modelMatchesPatterns, normalizeModelToken } from "../src/adapter/model.ts";
+import { isDeepSeekV4ProModel, modelMatchesPatterns, normalizeModelToken } from "../src/adapter/model.ts";
 
 test("normalizeModelToken collapses separators", () => {
 	assert.equal(normalizeModelToken("DeepSeek V4 Pro"), "deepseekv4pro");
@@ -14,11 +14,6 @@ test("default DeepSeek V4 Pro matcher hits official ids and names", () => {
 	assert.equal(isDeepSeekV4ProModel({ name: "DeepSeek V4 Pro" }), true);
 	assert.equal(isDeepSeekV4ProModel({ id: "deepseek-v4-flash" }), false);
 	assert.equal(isDeepSeekV4ProModel({ id: "gpt-5.6-luna" }), false);
-});
-
-test("default DeepSeek V4 Flash matcher hits flash and misses pro", () => {
-	assert.equal(isDeepSeekV4FlashModel({ id: "deepseek-v4-flash", name: "DeepSeek V4 Flash" }), true);
-	assert.equal(isDeepSeekV4FlashModel({ id: "deepseek-v4-pro" }), false);
 });
 
 test("custom patterns match substrings after normalization", () => {

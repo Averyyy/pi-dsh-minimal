@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { extractRequestSurface, rewriteMinimalProviderRequest, rewriteProviderRequest } from "../src/adapter/payload-rewrite.ts";
-import { WEAK_FLASH } from "../src/routing/core.ts";
 import {
 	DSH_BASH_PARAMETERS,
 	DSH_STR_REPLACE_EDITOR_PARAMETERS,
@@ -82,17 +81,4 @@ test("promoted Pro rewrites persona but leaves Pi tools", () => {
 	const surface = extractRequestSurface(rewritten);
 	assert.equal(surface.system, MINIMAL_PROMPT);
 	assert.deepEqual(surface.toolNames, ["read", "bash"]);
-});
-
-test("Flash rewrite swaps in the weak Flash persona and keeps tools", () => {
-	const rewritten = rewriteProviderRequest(
-		{
-			system: "Pi default prompt",
-			tools: [{ type: "function", function: { name: "read", parameters: { type: "object" } } }],
-		},
-		{ persona: WEAK_FLASH, rewriteTools: false },
-	);
-	const surface = extractRequestSurface(rewritten);
-	assert.equal(surface.system, WEAK_FLASH);
-	assert.deepEqual(surface.toolNames, ["read"]);
 });

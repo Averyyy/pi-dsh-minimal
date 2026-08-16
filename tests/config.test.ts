@@ -5,8 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	DEFAULT_DSH_MINIMAL_CONFIG,
-	normalizeFlashPatterns,
-	normalizeFlashRouting,
 	normalizeModelPatterns,
 	readDshMinimalConfig,
 	writeDshMinimalConfig,
@@ -17,13 +15,7 @@ test("normalizeModelPatterns drops empties and falls back to default", () => {
 	assert.deepEqual(normalizeModelPatterns([]), [...DEFAULT_DSH_MINIMAL_CONFIG.modelPatterns]);
 });
 
-test("normalizeFlashPatterns and routing have defaults", () => {
-	assert.deepEqual(normalizeFlashPatterns([]), ["deepseek-v4-flash"]);
-	assert.equal(normalizeFlashRouting("auto"), "auto");
-	assert.equal(normalizeFlashRouting("nope"), "weak");
-});
-
-test("read/write round-trips config and fills new fields", () => {
+test("read/write round-trips config", () => {
 	const dir = mkdtempSync(join(tmpdir(), "pi-dsh-minimal-config-"));
 	const path = join(dir, "pi-dsh-minimal.json");
 	const written = writeDshMinimalConfig(
@@ -32,9 +24,7 @@ test("read/write round-trips config and fills new fields", () => {
 			statusLine: false,
 			useOnAllModels: true,
 			modelPatterns: ["gpt"],
-			flashPatterns: ["flashy"],
 			promoteOn: "tool-call",
-			flashRouting: "auto",
 		},
 		path,
 	);
@@ -44,26 +34,29 @@ test("read/write round-trips config and fills new fields", () => {
 		statusLine: false,
 		useOnAllModels: true,
 		modelPatterns: ["gpt"],
-		flashPatterns: ["flashy"],
 		promoteOn: "tool-call",
-		flashRouting: "auto",
 	});
 	const raw = JSON.parse(readFileSync(path, "utf8")) as { enabled: boolean };
 	assert.equal(raw.enabled, false);
 });
 
-test("read migrates old configs without flash fields", () => {
+test("read ignores removed flash fields from older configs", () => {
 	const dir = mkdtempSync(join(tmpdir(), "pi-dsh-minimal-config-old-"));
 	const path = join(dir, "pi-dsh-minimal.json");
-	writeFileRaw(path, { enabled: true, statusLine: true, useOnAllModels: false, modelPatterns: ["deepseek-v4-pro"] });
-	assert.deepEqual(readDshMinimalConfig(path), {
+	writeFileRaw(path, {
 		enabled: true,
 		statusLine: true,
 		useOnAllModels: false,
 		modelPatterns: ["deepseek-v4-pro"],
 		flashPatterns: ["deepseek-v4-flash"],
-		promoteOn: "either",
 		flashRouting: "weak",
+	});
+	assert.deepEqual(readDshMinimalConfig(path), {
+		enabled: true,
+		statusLine: true,
+		useOnAllModels: false,
+		modelPatterns: ["deepseek-v4-pro"],
+		promoteOn: "either",
 	});
 });
 

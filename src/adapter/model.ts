@@ -30,10 +30,6 @@ export function isDeepSeekV4ProModel(model: ModelDescriptor | null | undefined):
 	return modelMatchesPatterns(model, ["deepseek-v4-pro"]);
 }
 
-export function isDeepSeekV4FlashModel(model: ModelDescriptor | null | undefined): boolean {
-	return modelMatchesPatterns(model, ["deepseek-v4-flash"]);
-}
-
 export function modelIdHint(model: ModelDescriptor | null | undefined): string {
 	return [model?.id, model?.name].filter(Boolean).join(" ");
 }

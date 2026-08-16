@@ -106,11 +106,8 @@ test("compaction starts a new epoch", () => {
 	assert.ok(scan.compactionSeq >= 0);
 });
 
-test("guide-only user messages do not count as rounds", () => {
-	const scan = scanSessionPhase(
-		[user("u1", "fix the crash"), user("g1", "\n\nRouter: classify this task (build or fix) now")],
-		"either",
-	);
+test("empty user messages do not count as rounds", () => {
+	const scan = scanSessionPhase([user("u1", "fix the crash"), user("u2", "   ")], "either");
 	assert.equal(scan.userRounds, 1);
 	assert.equal(scan.firstUserText, "fix the crash");
 });

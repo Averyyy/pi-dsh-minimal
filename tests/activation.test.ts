@@ -15,13 +15,23 @@ test("shouldUseAdapter defaults to DeepSeek V4 Pro and V4 Flash", () => {
 	assert.equal(shouldUseAdapter(ctx("gpt-5.6-luna"), config), false);
 });
 
-test("resolveAdapterProfile splits Pro vs Flash", () => {
+test("V4 Flash runs the Pro anchored-standard profile by default (v0.3.1)", () => {
 	const config = { ...DEFAULT_DSH_MINIMAL_CONFIG };
-	assert.equal(resolveAdapterProfile(ctx("deepseek-v4-pro"), config), "pro");
-	assert.equal(resolveAdapterProfile(ctx("deepseek-v4-flash"), config), "flash");
+	assert.equal(resolveAdapterProfile(ctx("deepseek-v4-flash"), config), "pro");
+});
+
+test("Flash can be opted out by removing the pattern", () => {
+	const config = { ...DEFAULT_DSH_MINIMAL_CONFIG, modelPatterns: ["deepseek-v4-pro"] };
+	assert.equal(resolveAdapterProfile(ctx("deepseek-v4-flash"), config), "inactive");
 	assert.equal(resolveAdapterProfile(ctx("gpt-5.6-luna"), config), "inactive");
 	assert.equal(resolveAdapterProfile(ctx("gpt-5.6-luna"), { ...config, useOnAllModels: true }), "pro");
-	assert.equal(resolveAdapterProfile(ctx("deepseek-v4-flash"), { ...config, useOnAllModels: true }), "flash");
+});
+
+test("resolveAdapterProfile returns pro for matches, inactive otherwise", () => {
+	const config = { ...DEFAULT_DSH_MINIMAL_CONFIG };
+	assert.equal(resolveAdapterProfile(ctx("deepseek-v4-pro"), config), "pro");
+	assert.equal(resolveAdapterProfile(ctx("gpt-5.6-luna"), config), "inactive");
+	assert.equal(resolveAdapterProfile(ctx("gpt-5.6-luna"), { ...config, useOnAllModels: true }), "pro");
 	assert.equal(resolveAdapterProfile(ctx("deepseek-v4-pro"), { ...config, enabled: false }), "inactive");
 });
 
@@ -32,11 +42,9 @@ test("shouldUseAdapter honors custom Pro patterns", () => {
 	);
 });
 
-test("desiredSurface is bootstrap then promoted for Pro, always flash for Flash", () => {
+test("desiredSurface is bootstrap then promoted for Pro", () => {
 	assert.equal(desiredSurface("pro", false), "bootstrap");
 	assert.equal(desiredSurface("pro", true), "promoted");
-	assert.equal(desiredSurface("flash", false), "flash");
-	assert.equal(desiredSurface("flash", true), "flash");
 	assert.equal(desiredSurface("inactive", false), "off");
 });
 

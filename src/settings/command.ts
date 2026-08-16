@@ -1,8 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
-	DEFAULT_FLASH_PATTERNS,
 	DEFAULT_MODEL_PATTERNS,
-	normalizeFlashRouting,
 	readDshMinimalConfig,
 	writeDshMinimalConfig,
 	type DshMinimalConfig,
@@ -12,21 +10,9 @@ import { normalizePromoteOn } from "../adapter/promotion.ts";
 import type { AdapterState } from "../adapter/state.ts";
 import { openDshSettingsScreen } from "./ui.ts";
 
-const DSH_COMMAND_COMPLETIONS = [
-	"on",
-	"off",
-	"all",
-	"status",
-	"models",
-	"match",
-	"unmatch",
-	"flash-match",
-	"flash-unmatch",
-	"promote",
-	"routing",
-] as const;
+const DSH_COMMAND_COMPLETIONS = ["on", "off", "all", "status", "models", "match", "unmatch", "promote"] as const;
 const DSH_USAGE =
-	"Usage: /dsh, /dsh on|off, /dsh all, /dsh status, /dsh models, /dsh match <pattern>, /dsh unmatch <pattern>, /dsh flash-match <pattern>, /dsh flash-unmatch <pattern>, /dsh promote either|tool-call|assistant-message, /dsh routing weak|auto|spec|react";
+	"Usage: /dsh, /dsh on|off, /dsh all, /dsh status, /dsh models, /dsh match <pattern>, /dsh unmatch <pattern>, /dsh promote either|tool-call|assistant-message";
 
 export function registerDshCommand(pi: ExtensionAPI, state: AdapterState): void {
 	function saveAndApply(ctx: ExtensionContext, nextConfig: DshMinimalConfig): boolean {
@@ -41,7 +27,7 @@ export function registerDshCommand(pi: ExtensionAPI, state: AdapterState): void 
 	}
 
 	pi.registerCommand("dsh", {
-		description: "Configure DeepSeek Harness adapter (Pro anchored-standard / Flash routing)",
+		description: "Configure DeepSeek Harness adapter (V4 Pro anchored-standard)",
 		getArgumentCompletions: (prefix) => {
 			const trimmed = prefix.trim().toLowerCase();
 			const [head] = trimmed.split(/\s+/, 1);
@@ -69,16 +55,9 @@ export function registerDshCommand(pi: ExtensionAPI, state: AdapterState): void 
 				saveAndApply(ctx, { ...state.config, statusLine: !state.config.statusLine });
 				return;
 			}
-			if (head === "match" || head === "flash-match") {
+			if (head === "match") {
 				if (!restText) {
-					ctx.ui.notify(`Usage: /dsh ${head} <pattern>`, "warning");
-					return;
-				}
-				if (head === "flash-match") {
-					saveAndApply(ctx, {
-						...state.config,
-						flashPatterns: [...new Set([...state.config.flashPatterns, restText])],
-					});
+					ctx.ui.notify(`Usage: /dsh match <pattern>`, "warning");
 					return;
 				}
 				saveAndApply(ctx, {
@@ -87,17 +66,9 @@ export function registerDshCommand(pi: ExtensionAPI, state: AdapterState): void 
 				});
 				return;
 			}
-			if (head === "unmatch" || head === "flash-unmatch") {
+			if (head === "unmatch") {
 				if (!restText) {
-					ctx.ui.notify(`Usage: /dsh ${head} <pattern>`, "warning");
-					return;
-				}
-				if (head === "flash-unmatch") {
-					const nextPatterns = state.config.flashPatterns.filter((pattern) => pattern !== restText);
-					saveAndApply(ctx, {
-						...state.config,
-						flashPatterns: nextPatterns.length > 0 ? nextPatterns : [...DEFAULT_FLASH_PATTERNS],
-					});
+					ctx.ui.notify(`Usage: /dsh unmatch <pattern>`, "warning");
 					return;
 				}
 				const nextPatterns = state.config.modelPatterns.filter((pattern) => pattern !== restText);
@@ -113,14 +84,6 @@ export function registerDshCommand(pi: ExtensionAPI, state: AdapterState): void 
 					return;
 				}
 				saveAndApply(ctx, { ...state.config, promoteOn: normalizePromoteOn(restText) });
-				return;
-			}
-			if (head === "routing") {
-				if (!restText) {
-					ctx.ui.notify("Usage: /dsh routing weak|auto|spec|react", "warning");
-					return;
-				}
-				saveAndApply(ctx, { ...state.config, flashRouting: normalizeFlashRouting(restText) });
 				return;
 			}
 			if (head === "models") {
@@ -156,8 +119,6 @@ export function formatDshSettings(config: DshMinimalConfig): string {
 		`dsh: ${config.enabled ? "on" : "off"}`,
 		`all models ${config.useOnAllModels ? "on" : "off"}`,
 		`promote ${config.promoteOn}`,
-		`flash routing ${config.flashRouting}`,
 		`pro ${config.modelPatterns.join(", ")}`,
-		`flash ${config.flashPatterns.join(", ")}`,
 	].join(", ");
 }

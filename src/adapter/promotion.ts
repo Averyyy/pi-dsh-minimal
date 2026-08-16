@@ -1,7 +1,18 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import { extractTextContent, isGuideText } from "../routing/core.ts";
 
 export type PromoteOn = "either" | "tool-call" | "assistant-message";
+
+function extractTextContent(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.map((part) => {
+			if (typeof part === "string") return part;
+			if (part && typeof part === "object" && "text" in part && typeof part.text === "string") return part.text;
+			return "";
+		})
+		.join(" ");
+}
 
 export const PROMOTE_ON_VALUES = ["either", "tool-call", "assistant-message"] as const;
 
@@ -46,7 +57,7 @@ export function scanSessionPhase(entries: readonly SessionEntry[], promoteOn: Pr
 		const role = entry.message?.role;
 		if (role === "user") {
 			const text = extractTextContent(entry.message.content).trim();
-			if (!text || isGuideText(text)) continue;
+			if (!text) continue;
 			userRounds += 1;
 			if (!firstUserText) firstUserText = text;
 			continue;

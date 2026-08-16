@@ -6,23 +6,50 @@
 [![pi.dev](https://img.shields.io/badge/pi.dev-package-111111)](https://pi.dev/packages/pi-dsh-minimal)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
+## Measured on DeepSWE (2026-08-16)
+
+Full 113-task [DeepSWE v1.1](https://deepswe.datacurve.ai/) run: pi agent in
+the official task containers, `opencode-go/deepseek-v4-flash:max`, v0.3.1
+defaults, official task verifiers.
+
+| Configuration | Solved | Note |
+| --- | --- | --- |
+| **V4 Flash + this extension — all 113 tasks** | **69/113 = 61.1%** | median 24 min/task |
+| Official leaderboard `deepseek-v4-flash [max]` | 53% | mini-swe-agent harness |
+| Official leaderboard `deepseek-v4-pro [max]` | 63% | ~2.4× the cost |
+| pi stock Flash, no extension (pooled, n=26) | 15/26 = 57.7% | internal reference |
+
+Reading: **+8pp over the official Flash leaderboard number**, within 2pp of
+V4 Pro (69/112 = 61.6% excluding the single 90-min timeout task). Against pi's own stock surface the aggregate lift is smaller
+(~+3pp, noise-level at n=26; the initial 10-task paired A/B measured 9/10
+vs 6/10 but did not scale up — treat it as an optimistic sample). Failure
+profile: 32 of 44 misses are within 1-5 tests of passing; only 4 total
+collapses and 1 timeout. Caveats: single sample; the agent container had
+network access (7/113 runs fetched upstream repos — excluding them all:
+61.3%; worst-case treating their 4 solves as tainted: 57.5%, still above
+53%). Full data: `runs/deepswe/RESULTS-full.md`.
+
+## What it is
+
 A [Pi](https://pi.dev) extension that maps DeepSeek V4 models onto the
 measured [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
-surfaces:
+surface:
 
 | Model | Profile | What it does |
 | --- | --- | --- |
 | **V4 Pro** | [anchored-standard](https://github.com/xiaobright/dsh-anchored-standard) | First request: official two-tool schema. Later turns: restore Pi's original tools. |
-| **V4 Flash** | [router-standard weak](https://github.com/yjh051108/dsh-router-standard) + [mode-boost](https://github.com/yjh051108/dsh-mode-boost) | Weak self-routing persona + near-field classify/converge guidance. Tools stay Pi's. |
+| **V4 Flash** | anchored-standard (since v0.3.1) | Same bootstrap — 61.1% on the full DeepSWE v1.1 set vs the official Flash leaderboard's 53%. |
 
 > V4 Pro overfits the **first-request tool schema**. Official minimal
 > (`bash` + `str_replace_editor`) opens with **We need…** / **I need…**;
 > a rich catalog opens with **Let me…**. After that first request the
 > trajectory stays put, so later turns can take Pi's full tools back.
 >
-> V4 Flash is **not** schema-sensitive in the same way. It responds to
-> persona + guidance: task classification and deep-but-converge. Two-tool
-> anchoring is the wrong knob.
+> **The v0.2.x Flash weak-routing profile was removed in v0.3.0** — it
+> measured no lift on the same harness (table above), and upstream's own
+> P21 data shows its near-field guidance is negative on related-task
+> chains. The anchored-standard bootstrap has no guidance text, so that
+> failure mode does not apply; v0.3.1 turned it on for Flash by default.
 
 ```sh
 pi install npm:pi-dsh-minimal
@@ -31,10 +58,12 @@ pi install npm:pi-dsh-minimal
 This is a community project. It is not an official DeepSeek or Pi preset and is
 not affiliated with or endorsed by DeepSeek.
 
-## V4 Pro — anchored-standard
+## V4 Pro / V4 Flash — anchored-standard
 
-Default trigger: model name/id contains `deepseek-v4-pro`
-(`deepseek-v4-flash` does **not** match this profile).
+Default trigger: model name/id contains `deepseek-v4-pro` or
+`deepseek-v4-flash` (both since v0.3.1). All other models are untouched
+unless `useOnAllModels` is on. Opt Flash out with
+`/dsh unmatch deepseek-v4-flash`.
 
 | Phase | When | Surface |
 | --- | --- | --- |
@@ -45,17 +74,30 @@ Default trigger: model name/id contains `deepseek-v4-pro`
 `/dsh promote either|tool-call|assistant-message` changes the signal.
 `tool-call` keeps the session on two tools if the first reply is text-only.
 
-## V4 Flash — weak + mode-boost
+## Why the v0.2.x Flash profile was removed
 
-Default trigger: model name/id contains `deepseek-v4-flash`.
+v0.2.0 ported dsh-routing-suite's weak routing + mode-boost (persona swap +
+`Router: classify this task…` guidance). Removal evidence, in order of
+weight:
 
-| Piece | Behavior |
-| --- | --- |
-| Persona | Measured Flash weak text: classify build vs fix, recall/anti-runaway anchors, `Think deeply first, then produce.` |
-| Tools | **Unchanged.** Flash does not get the two-tool first-turn clamp. |
-| Guidance | Appended to each real user message. Rounds 1–2: classify. Round 3+: "this is a NEW task, classify fresh". Simple tasks get a fast-commit tail; complex tasks get a directed deep tail (no decision-closure suffix on Flash). |
-| Chat stand-down | `你好` / `hello` / short non-tasks: no persona swap, no guidance. |
-| Routing | Default `weak` (model self-classifies). `/dsh routing auto` uses the keyword classifier; `spec` / `react` force a band. |
+1. **Controlled DeepSWE A/B** (2026-08-16): 10 official DeepSWE v1.1 tasks ×
+   extension on/off, same pi agent + `opencode-go/deepseek-v4-flash:max`,
+   official verifier grading. Solved 4/11 (on) vs 5/10 (off), mean partial
+   0.810 vs 0.901, McNemar p=1.0. Plugin activation was verified per run;
+   failure autopsies showed ordinary wrong-implementations, not guidance
+   pathology — i.e. no signal, not a broken port.
+2. **Upstream's own related-chain data** (dsh-routing-suite P21): near-field
+   guidance is *negative* on same-file evolution chains (deep 46% vs baseline
+   63%) because it steers toward classification instead of reading existing
+   code. Real SWE sessions are exactly that shape.
+3. **Probe-vs-score gap**: all published Flash "lifts" (route %, reasoning
+   depth, convergence) are micro-task probes with fixture tools; upstream's
+   own P2/P9 note simple tasks saturate and score-level validation on hard
+   tasks was never done.
+
+Baseline sanity: pi without the extension solved 50% of the subset vs the
+official DeepSWE v1.1 leaderboard's 53% for `deepseek-v4-flash [max]`
+(mini-swe-agent harness) — so the no-lift reading is not a harness artifact.
 
 ## Install
 
@@ -69,7 +111,7 @@ From git:
 pi install git:github.com/Averyyy/pi-dsh-minimal
 ```
 
-Restart Pi (or `/reload`). New session, pick DeepSeek V4 Pro or V4 Flash.
+Restart Pi (or `/reload`). New session, pick DeepSeek V4 Pro.
 
 Local checkout:
 
@@ -84,8 +126,8 @@ pi -e /path/to/pi-dsh-minimal
 
 | Tab | What |
 | --- | --- |
-| General | Enable, use on all models, Pro promote-on, Flash routing, statusline |
-| Models | Pro patterns (default `deepseek-v4-pro`) and Flash patterns (default `deepseek-v4-flash`) |
+| General | Enable, use on all models, Pro promote-on, statusline |
+| Models | Pro patterns (default `deepseek-v4-pro`) |
 | About | GitHub / changelog / model card / issues |
 
 Commands:
@@ -98,10 +140,7 @@ Commands:
 /dsh models               open the Models tab
 /dsh match <pat>          add a Pro trigger
 /dsh unmatch <pat>        remove a Pro trigger
-/dsh flash-match <pat>    add a Flash trigger
-/dsh flash-unmatch <pat>  remove a Flash trigger
 /dsh promote either|tool-call|assistant-message
-/dsh routing weak|auto|spec|react
 ```
 
 Config file: `~/.pi/agent/pi-dsh-minimal.json`.
@@ -111,15 +150,15 @@ Config file: `~/.pi/agent/pi-dsh-minimal.json`.
   "enabled": true,
   "statusLine": true,
   "useOnAllModels": false,
-  "modelPatterns": ["deepseek-v4-pro"],
-  "flashPatterns": ["deepseek-v4-flash"],
-  "promoteOn": "either",
-  "flashRouting": "weak"
+  "modelPatterns": ["deepseek-v4-pro", "deepseek-v4-flash"],
+  "promoteOn": "either"
 }
 ```
 
+(`flashPatterns` / `flashRouting` from v0.2.x configs are ignored.)
+
 Statusline: `dsh anchored` while Pro is bootstrapping, `dsh anchored • promoted`
-after the catalog opens, `dsh flash` on Flash.
+after the catalog opens.
 
 ## Verify
 
@@ -133,9 +172,9 @@ after the catalog opens, `dsh flash` on Flash.
 
 **Flash**
 
-1. Select DeepSeek V4 Flash.
-2. A real coding task should get the weak Flash persona plus a `Router: classify this task…` tail.
-3. `你好` should leave Pi's prompt and tools alone.
+Identical bootstrap to Pro (first request: two tools + official persona;
+promotion after the first assistant message/tool call). `/dsh unmatch
+deepseek-v4-flash` opts Flash out entirely.
 
 Set `PI_DSH_MINIMAL_DUMP=/tmp/dsh-minimal-request.json` to write the rewritten
 surface (includes `profile` and `promoted`).
@@ -156,8 +195,6 @@ npm run live:trajectory   # needs a configured DeepSeek V4 Pro model
 - During bootstrap, `bash` is a persistent process. `cd` and `export` stick
   until promotion, session end, or a 300s timeout reset.
 - `str_replace_editor` requires **absolute** paths, matching dsh.
-- Flash guidance is injected in the `context` hook (near-field, not a second
-  visible user turn).
 - The extension performs no network requests and adds no telemetry.
 
 ## Related
@@ -165,13 +202,12 @@ npm run live:trajectory   # needs a configured DeepSeek V4 Pro model
 | Project | Host | Surface |
 | --- | --- | --- |
 | [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard) | DeepSeek Harness | Two-phase: minimal bootstrap, then Standard tools |
-| [dsh-routing-suite](https://github.com/yjh051108/dsh-routing-suite) | DeepSeek Harness | Flash weak routing + mode-boost |
+| [dsh-routing-suite](https://github.com/yjh051108/dsh-routing-suite) | DeepSeek Harness | Flash weak routing + mode-boost (source of the removed v0.2.0 Flash profile) |
 | [pi-deepseek-anchor](https://github.com/kxh4892636/pi-deepseek-anchor) | Pi | Port of the two-phase preset |
 | [pi-dsh](https://github.com/fatwang2/pi-dsh) | Pi | Runs DSH as a provider inside Pi |
-| **pi-dsh-minimal** | Pi | Pro anchored-standard + Flash weak/mode-boost |
+| **pi-dsh-minimal** | Pi | Pro anchored-standard |
 
 ## License
 
-MIT. Tool descriptions, schemas, editor result strings, and Flash routing
-texts are derived from DeepSeek Harness / dsh-anchored-standard /
-dsh-mode-boost (MIT). See [NOTICE](./NOTICE).
+MIT. Tool descriptions, schemas, and editor result strings are derived from
+DeepSeek Harness / dsh-anchored-standard (MIT). See [NOTICE](./NOTICE).

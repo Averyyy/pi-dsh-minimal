@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, basename } from "node:path";
 import { PersistentBashSession } from "../src/tools/bash-session.ts";
 
 test("persistent bash keeps cwd and exported env across calls", async () => {
@@ -10,8 +10,10 @@ test("persistent bash keeps cwd and exported env across calls", async () => {
 	const shell = new PersistentBashSession(dir);
 	try {
 		await shell.exec(`cd ${JSON.stringify(dir)} && export DSH_MINIMAL_STATE=PERSISTED`);
-		const output = await shell.exec(`printf '%s:%s\\n' "$DSH_MINIMAL_STATE" "$PWD"`);
-		assert.equal(output.trim(), `PERSISTED:${dir}`);
+		// $PWD comes back POSIX-shaped on Git Bash (/tmp/...), so compare the
+		// unique temp basename instead of the full path.
+		const output = await shell.exec(`printf '%s:%s\\n' "$DSH_MINIMAL_STATE" "$(basename "$PWD")"`);
+		assert.equal(output.trim(), `PERSISTED:${basename(dir)}`);
 	} finally {
 		await shell.reset("test done");
 	}

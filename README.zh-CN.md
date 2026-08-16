@@ -6,20 +6,46 @@
 [![pi.dev](https://img.shields.io/badge/pi.dev-package-111111)](https://pi.dev/packages/pi-dsh-minimal)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-这是一个 [Pi](https://pi.dev) 扩展：按模型把 DeepSeek V4 映射到实测过的
+## DeepSWE 实测(2026-08-16,全量 113 题)
+
+官方 [DeepSWE v1.1](https://deepswe.datacurve.ai/) 全量:pi agent 跑在
+官方任务容器内,`opencode-go/deepseek-v4-flash:max`,v0.3.1 默认配置,
+官方 verifier 逐题判分。
+
+| 配置 | 解出 | 说明 |
+| --- | --- | --- |
+| **V4 Flash + 本扩展 — 全量 113 题** | **69/113 = 61.1%** | 中位 24 分钟/题 |
+| 官方榜 `deepseek-v4-flash [max]` | 53% | mini-swe-agent harness |
+| 官方榜 `deepseek-v4-pro [max]` | 63% | 成本 ~2.4× |
+| pi 原生 Flash(汇总 n=26) | 15/26 = 57.7% | 内部参照 |
+
+解读:**比官方 Flash 榜高 8pp**,距 V4 Pro 只差 2pp(去掉唯一超时题后
+69/112 = 61.6%)。对 pi 自身原生
+表面的聚合提升更小(约 +3pp,n=26 噪声量级;最初的 10 题配对 A/B 是
+9/10 vs 6/10,但未在大样本复现,应视为乐观样本)。失败画像:44 个未解
+中 32 个只差 1-5 个测试,方向性全塌仅 4 题,超时仅 1 题。注意事项:
+单次采样;agent 容器有网络(7/113 题抓取过上游仓库,全部剔除后
+61.3%,最坏按污染计 57.5%,仍高于 53%)。完整数据:
+`runs/deepswe/RESULTS-full.md`。
+
+## 这是什么
+
+这是一个 [Pi](https://pi.dev) 扩展：把 DeepSeek V4 模型映射到实测过的
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 表面。
 
 | 模型 | 配置 | 做什么 |
 | --- | --- | --- |
 | **V4 Pro** | [anchored-standard](https://github.com/xiaobright/dsh-anchored-standard) | 首轮：官方双工具 schema。之后：恢复 Pi 原来的工具。 |
-| **V4 Flash** | [router-standard weak](https://github.com/yjh051108/dsh-router-standard) + [mode-boost](https://github.com/yjh051108/dsh-mode-boost) | weak 自路由 persona + 近场分类/收敛引导。工具保持 Pi 原样。 |
+| **V4 Flash** | anchored-standard(v0.3.1 起) | 同样的引导——全量 DeepSWE v1.1 解出 61.1%,官方 Flash 榜为 53%。 |
 
 > V4 Pro 会过拟合**首轮工具 schema**。官方极简（`bash` + `str_replace_editor`）
 > 思维链首行是 **We need…** / **I need…**；工具一变丰富就会落到 **Let me…**。
 > 首轮锚定之后轨迹不会翻，所以后面可以把 Pi 的完整工具还回去。
 >
-> V4 Flash **没有** Pro 那么吃 schema。它吃的是 persona 和引导：按任务选思考
-> 深度，并且想完能收敛。两工具锚定不是 Flash 该拧的旋钮。
+> **v0.2.x 的 Flash weak-routing 配置已在 v0.3.0 移除**——同一套 harness
+> 实测无提升（见上表），且上游 P21 数据显示其近场引导在相关任务链上是
+> 负收益。anchored-standard 引导没有引导文本，不存在该失败模式;
+> v0.3.1 起对 Flash 默认开启。
 
 ```sh
 pi install npm:pi-dsh-minimal
@@ -27,9 +53,11 @@ pi install npm:pi-dsh-minimal
 
 这是社区项目，并非 DeepSeek 或 Pi 官方预设，也不代表 DeepSeek 的认可或背书。
 
-## V4 Pro — 锚定后晋升
+## V4 Pro / V4 Flash — 锚定后晋升
 
-默认触发：模型名/id 包含 `deepseek-v4-pro`（`deepseek-v4-flash` 不会进这个配置）。
+默认触发：模型名/id 包含 `deepseek-v4-pro` 或 `deepseek-v4-flash`
+（v0.3.1 起两者都是）。其他模型一律不动，除非打开 `useOnAllModels`。
+`/dsh unmatch deepseek-v4-flash` 可让 Flash 完全退出。
 
 | 阶段 | 何时 | 表面 |
 | --- | --- | --- |
@@ -40,17 +68,26 @@ pi install npm:pi-dsh-minimal
 `/dsh promote either|tool-call|assistant-message` 改晋升信号。
 `tool-call` 下如果首答是纯文字，会话会一直停在双工具。
 
-## V4 Flash — weak + mode-boost
+## 为什么移除了 v0.2.x 的 Flash 配置
 
-默认触发：模型名/id 包含 `deepseek-v4-flash`。
+v0.2.0 移植过 dsh-routing-suite 的 weak 路由 + mode-boost（换 persona +
+`Router: classify this task…` 引导）。移除依据，按权重排序：
 
-| 部分 | 行为 |
-| --- | --- |
-| Persona | 实测 Flash weak 文本：先判断 build/fix，带回顾/反跑题锚，以及 `Think deeply first, then produce.` |
-| 工具 | **不改。** Flash 不做首轮双工具收窄。 |
-| 引导 | 接到每条真实用户消息后面。第 1–2 轮：分类。第 3 轮起：「这是新任务，重新分类」。简单任务走快速提交尾；复杂任务走有向深度尾（Flash 不加决策闭环后缀）。 |
-| 寒暄让位 | `你好` / `hello` / 短句无任务：不换 persona、不加引导。 |
-| 路由 | 默认 `weak`（模型自己分类）。`/dsh routing auto` 用关键词分类器；`spec` / `react` 强制一个带。 |
+1. **受控 DeepSWE A/B**（2026-08-16）：官方 DeepSWE v1.1 的 10 题 ×
+   扩展开/关，同一 pi agent + `opencode-go/deepseek-v4-flash:max`，
+   官方 verifier 判分。开 4/11、关 5/10，平均 partial 0.810 vs 0.901，
+   McNemar p=1.0。每个 run 都验证过插件正常激活；失败尸检显示的是普通的
+   实现走偏而非引导病态——即「无信号」，不是「移植坏了」。
+2. **上游自己的相关链数据**（dsh-routing-suite P21）：近场引导在同文件
+   演进链上是*负收益*（deep 46% vs baseline 63%），机制是引导让模型偏向
+   分类而不是读已有代码。真实 SWE 会话正是这种形态。
+3. **探针与分数的鸿沟**：已发表的 Flash「提升」（路由命中率、思考深度、
+   收敛率）全部是 fixture 微任务探针；上游自己的 P2/P9 就注明简单任务
+   分数饱和、困难任务上的分数级验证从未做过。
+
+基线合理性：不开扩展时 pi 在该子集解出 50%，与官方 DeepSWE v1.1 榜
+`deepseek-v4-flash [max]` 的 53%（mini-swe-agent harness）一致——
+「无提升」不是 harness 伪影。
 
 ## 安装
 
@@ -64,7 +101,7 @@ pi install npm:pi-dsh-minimal
 pi install git:github.com/Averyyy/pi-dsh-minimal
 ```
 
-重启 Pi（或 `/reload`）。新建会话，选 DeepSeek V4 Pro 或 V4 Flash。
+重启 Pi（或 `/reload`）。新建会话，选 DeepSeek V4 Pro。
 
 本地检出：
 
@@ -78,8 +115,8 @@ pi -e /path/to/pi-dsh-minimal
 
 | 页 | 内容 |
 | --- | --- |
-| General | 启用、对所有模型触发、Pro 晋升条件、Flash 路由、状态栏 |
-| Models | Pro pattern（默认 `deepseek-v4-pro`）和 Flash pattern（默认 `deepseek-v4-flash`） |
+| General | 启用、对所有模型触发、Pro 晋升条件、状态栏 |
+| Models | Pro pattern（默认 `deepseek-v4-pro`） |
 | About | GitHub / changelog / 模型卡 / issues |
 
 命令：
@@ -92,10 +129,7 @@ pi -e /path/to/pi-dsh-minimal
 /dsh models               打开 Models 页
 /dsh match <pat>          添加 Pro 触发
 /dsh unmatch <pat>        删除 Pro 触发
-/dsh flash-match <pat>    添加 Flash 触发
-/dsh flash-unmatch <pat>  删除 Flash 触发
 /dsh promote either|tool-call|assistant-message
-/dsh routing weak|auto|spec|react
 ```
 
 配置文件：`~/.pi/agent/pi-dsh-minimal.json`。
@@ -105,15 +139,14 @@ pi -e /path/to/pi-dsh-minimal
   "enabled": true,
   "statusLine": true,
   "useOnAllModels": false,
-  "modelPatterns": ["deepseek-v4-pro"],
-  "flashPatterns": ["deepseek-v4-flash"],
-  "promoteOn": "either",
-  "flashRouting": "weak"
+  "modelPatterns": ["deepseek-v4-pro", "deepseek-v4-flash"],
+  "promoteOn": "either"
 }
 ```
 
-状态栏：Pro 引导期是 `dsh anchored`，晋升后是 `dsh anchored • promoted`，
-Flash 是 `dsh flash`。
+（v0.2.x 配置里的 `flashPatterns` / `flashRouting` 会被忽略。）
+
+状态栏：Pro 引导期是 `dsh anchored`，晋升后是 `dsh anchored • promoted`。
 
 ## 如何验证
 
@@ -127,9 +160,8 @@ Flash 是 `dsh flash`。
 
 **Flash**
 
-1. 选择 DeepSeek V4 Flash。
-2. 真实编码任务应拿到 Flash weak persona，以及 `Router: classify this task…` 尾巴。
-3. `你好` 应保持 Pi 原来的提示词和工具。
+与 Pro 完全相同的引导（首轮双工具 + 官方 persona；首个助手消息/工具
+调用后晋升）。`/dsh unmatch deepseek-v4-flash` 可让 Flash 完全退出。
 
 设置 `PI_DSH_MINIMAL_DUMP=/tmp/dsh-minimal-request.json` 可把改写后的表面
 写到文件（含 `profile` 和 `promoted`）。
@@ -149,7 +181,6 @@ npm run live:trajectory   # 需要已配置 DeepSeek V4 Pro
 - 引导期内 `bash` 是持久进程。`cd` 和 `export` 会保持到晋升、会话结束，或
   300 秒超时重置。
 - `str_replace_editor` 要求 **绝对路径**，与 dsh 一致。
-- Flash 引导走 `context` 钩子（近场注入，不是多出来的一轮用户消息）。
 - 扩展不发起网络请求，也不增加遥测。
 
 ## 相关项目
@@ -157,13 +188,13 @@ npm run live:trajectory   # 需要已配置 DeepSeek V4 Pro
 | 项目 | 宿主 | 表面 |
 | --- | --- | --- |
 | [dsh-anchored-standard](https://github.com/xiaobright/dsh-anchored-standard) | DeepSeek Harness | 两阶段：先极简锚定，再晋升 Standard |
-| [dsh-routing-suite](https://github.com/yjh051108/dsh-routing-suite) | DeepSeek Harness | Flash weak 路由 + mode-boost |
+| [dsh-routing-suite](https://github.com/yjh051108/dsh-routing-suite) | DeepSeek Harness | Flash weak 路由 + mode-boost（v0.2.0 已移除的 Flash 配置的来源） |
 | [pi-deepseek-anchor](https://github.com/kxh4892636/pi-deepseek-anchor) | Pi | 上述两阶段 preset 的 Pi 移植 |
 | [pi-dsh](https://github.com/fatwang2/pi-dsh) | Pi | 在 Pi 里把 DSH 当成 provider 跑 |
-| **pi-dsh-minimal** | Pi | Pro 锚定晋升 + Flash weak/mode-boost |
+| **pi-dsh-minimal** | Pi | Pro 锚定晋升 |
 
 ## 许可证
 
-MIT。工具描述、schema、编辑器回包字符串和 Flash 路由文本源自 DeepSeek
-Harness / dsh-anchored-standard / dsh-mode-boost（MIT）。见
+MIT。工具描述、schema 和编辑器回包字符串源自 DeepSeek
+Harness / dsh-anchored-standard（MIT）。见
 [NOTICE](./NOTICE)。

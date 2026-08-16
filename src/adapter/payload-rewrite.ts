@@ -1,5 +1,4 @@
 import { DSH_MINIMAL_TOOLS, MINIMAL_PROMPT } from "../dsh/official.ts";
-import { isGuideText } from "../routing/core.ts";
 
 function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -165,7 +164,7 @@ export function countUserRounds(messages: readonly { role?: string; content?: un
 						.map((part) => (part && typeof part === "object" && "text" in part ? String(part.text ?? "") : ""))
 						.join(" ")
 				: "");
-		if (!extracted.trim() || isGuideText(extracted)) continue;
+		if (!extracted.trim()) continue;
 		rounds += 1;
 	}
 	return rounds;

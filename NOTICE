@@ -20,8 +20,10 @@ promotion signal):
 
   https://github.com/xiaobright/dsh-anchored-standard
 
-The V4 Flash persona, classify/converge guidance, and chat stand-down
-follow `dsh-mode-boost` / `dsh-router-standard` (weak band):
+pi-dsh-minimal v0.2.0 also ported the V4 Flash weak persona and
+classify/converge guidance from `dsh-mode-boost` /
+`dsh-router-standard`; that Flash path was removed in v0.3.0 after a
+controlled DeepSWE A/B measured no lift. No Flash surface is shipped.
 
   https://github.com/yjh051108/dsh-mode-boost
   https://github.com/yjh051108/dsh-router-standard

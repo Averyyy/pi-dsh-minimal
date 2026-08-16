@@ -17,7 +17,6 @@ export { shouldUseAdapter, resolveAdapterProfile };
 
 export function desiredSurface(profile: AdapterProfile, promoted: boolean): ToolSurface {
 	if (profile === "inactive") return "off";
-	if (profile === "flash") return "flash";
 	return promoted ? "promoted" : "bootstrap";
 }
 
@@ -97,7 +96,6 @@ function setStatus(ctx: ExtensionContext, state: AdapterState): void {
 			profile: state.phase.profile,
 			promoted: state.phase.promoted,
 			useOnAllModels: state.config.useOnAllModels,
-			chatStandDown: state.phase.chatStandDown,
 		}),
 	);
 }

@@ -12,3 +12,4 @@ tmp/
 coverage/
 *.log
 .DS_Store
+runs/
