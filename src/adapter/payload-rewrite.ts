@@ -108,6 +108,7 @@ export function extractRequestSurface(payload: unknown): {
 	toolNames: string[];
 	tools: unknown;
 	lastUser?: string;
+	messageRoles?: string[];
 } {
 	if (!isObject(payload)) return { toolNames: [], tools: undefined };
 	let system: string | undefined;
