@@ -1,0 +1,48 @@
+name: Publish to npm on release
+
+# When a GitHub release is published, publish the matching version to npm.
+# Requires the NPM_TOKEN secret (automation token with publish rights).
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org/
+
+      - name: Check tag matches package.json version
+        run: |
+          PKG_VER="$(node -p "require('./package.json').version")"
+          TAG_VER="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_VER" != "$TAG_VER" ]; then
+            echo "tag $GITHUB_REF_NAME does not match package.json version $PKG_VER" >&2
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - name: Skip if version already on npm
+        id: check
+        run: |
+          PKG_VER="$(node -p "require('./package.json').version")"
+          if npm view "pi-dsh-minimal@$PKG_VER" version >/dev/null 2>&1; then
+            echo "pi-dsh-minimal@$PKG_VER already published; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish
+        if: steps.check.outputs.skip != 'true'
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
