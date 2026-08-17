@@ -74,8 +74,24 @@ export interface RewriteOptions {
 	rewriteTools: boolean;
 }
 
+export function looksLikeSummarizationSystem(system: string | undefined): boolean {
+	return Boolean(system && /context summarization assistant/i.test(system));
+}
+
+export function looksLikeCompactionUser(text: string | undefined): boolean {
+	if (!text) return false;
+	return text.includes("<conversation>") && (text.includes("</conversation>") || text.includes("<previous-summary>"));
+}
+
+/** Compaction / branch-summary calls share this hook; do not rewrite them. */
+export function isNonAgentProviderPayload(payload: unknown): boolean {
+	const surface = extractRequestSurface(payload);
+	return looksLikeSummarizationSystem(surface.system) || looksLikeCompactionUser(surface.lastUser);
+}
+
 export function rewriteProviderRequest(payload: unknown, options: RewriteOptions): unknown {
 	if (!isObject(payload)) return payload;
+	if (isNonAgentProviderPayload(payload)) return payload;
 	const next: Record<string, unknown> = { ...payload };
 	if ("system" in next && (typeof next.system === "string" || Array.isArray(next.system))) {
 		next.system = rewriteInstructionContent(next.system, options.persona);

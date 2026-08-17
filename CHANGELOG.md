@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+## 0.4.0
+
+- **Keep the official persona as the first sentence, but stop stripping
+  Pi context after promotion.** Request #1 stays the official one-liner
+  + two tools on the **wire only** (`before_provider_request`). Bootstrap
+  does not replace `before_agent_start`'s chained system prompt, so
+  hermes / hypa appends survive to be reanchored on promote. The same
+  post-promotion request restores Pi tools, tools-guide, docs paths,
+  AGENTS.md, and skills. Pi identity is not restored.
+- Skip `before_provider_request` rewrites on compaction / branch-summary
+  calls (those share the hook and were getting the official persona).
+- `str_replace_editor` is removed from the active set when the adapter
+  is off, so other models no longer inherit it.
+- Promoting no longer unions a mid-bootstrap `setActiveTools` replacement
+  back onto the pre-bootstrap snapshot (plan mode / presets). Newly
+  registered tools added on top of the two-tool set are still kept.
+- Restoring Pi `bash` after bootstrap is skipped if another extension
+  already replaced our override.
+
 ## 0.3.1
 
 - **V4 Flash now runs the Pro anchored-standard profile by default.**

@@ -61,8 +61,8 @@ pi install npm:pi-dsh-minimal
 
 | 阶段 | 何时 | 表面 |
 | --- | --- | --- |
-| 引导（第 1 次请求） | 新会话，或压缩后的第一次请求 | 系统提示词 = `You are a helpful software engineer assistant.` 工具 = 官方持久 `bash` + `str_replace_editor`。 |
-| 晋升（之后的请求） | 第一次持久的 **助手消息** 或 **工具调用**（`promoteOn: either`） | 仍是官方 persona。**恢复 Pi 原来的工具。** |
+| 引导（第 1 次请求） | 新会话，或压缩后的第一次请求 | 系统提示词 = `You are a helpful software engineer assistant.` 工具 = 官方持久 `bash` + `str_replace_editor`。没有 AGENTS.md，没有 skill 目录。 |
+| 晋升（之后的请求） | 第一次持久的 **助手消息** 或 **工具调用**（`promoteOn: either`） | 只保留官方首句，不恢复 Pi identity。同一枪恢复 Pi 工具、tools-guide、文档路径、`<project_context>`、`<available_skills>`，以及其它 extension 加进 system prompt 的内容。 |
 | 压缩之后 | `session_compact` | 回到引导面，直到出现新的晋升信号。 |
 
 `/dsh promote either|tool-call|assistant-message` 改晋升信号。
@@ -155,8 +155,8 @@ pi -e /path/to/pi-dsh-minimal
 1. 启用扩展并选择 DeepSeek V4 Pro。
 2. 发一个小的改文件任务（`main.py` 打印 hello，改成 world）。
 3. 第一段 thinking 应以 `We need…` / `I need…` 开头，而不是 `Let me…`。
-4. 第一次请求应只暴露 `bash` 和 `str_replace_editor`。
-5. 第一次助手回复或工具调用之后，后续请求应看到 Pi 原来的工具。
+4. 第一次请求应只暴露 `bash` 和 `str_replace_editor`。系统提示词应正好是官方那一句。
+5. 第一次助手回复或工具调用之后，后续请求应看到 Pi 原来的工具；`read` 开着时还应看到 skill 目录。
 
 **Flash**
 
@@ -176,8 +176,9 @@ npm run live:trajectory   # 需要已配置 DeepSeek V4 Pro
 - Pro 的**第一次请求**决定轨迹。工具 **schema 身份** 是决定变量；本包装会改写
   provider 请求，即使 TypeBox 本来会加上 `strict` / `additionalProperties`，
   模型看到的仍是官方双工具目录。
-- 晋升之后只继续强制官方 persona。工具回到 Pi 原来的那套（通常是 `read` /
-  `bash` / `edit` / `write` / …）。
+- 晋升之后官方 persona 仍是**第一句**。同一枪恢复 Pi 工具、tools-guide、
+  文档路径、AGENTS.md、skill 目录，并保留其它 extension 对 system prompt
+  的追加。Pi identity 不恢复。
 - 引导期内 `bash` 是持久进程。`cd` 和 `export` 会保持到晋升、会话结束，或
   300 秒超时重置。
 - `str_replace_editor` 要求 **绝对路径**，与 dsh 一致。

@@ -1,6 +1,7 @@
 import type { PersistentBashSession } from "../tools/bash-session.ts";
 import type { DshMinimalConfig } from "./config.ts";
 import type { AdapterProfile } from "./profile.ts";
+import { emptyPromptResources, type PromptResources } from "./prompt.ts";
 
 export type ToolSurface = "off" | "bootstrap" | "promoted";
 
@@ -25,6 +26,8 @@ export function emptySessionPhase(): SessionPhase {
 	};
 }
 
+export { emptyPromptResources };
+
 export interface AdapterState {
 	enabled: boolean;
 	cwd: string;
@@ -34,4 +37,5 @@ export interface AdapterState {
 	bashOverrideInstalled: boolean;
 	surface: ToolSurface;
 	phase: SessionPhase;
+	promptResources: PromptResources;
 }

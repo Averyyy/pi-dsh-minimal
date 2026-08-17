@@ -101,7 +101,7 @@ task is official schema/string identity.
 | --- | --- | --- |
 | Anything | this file + `README.md` | `CHANGELOG.md`, `NOTICE` |
 | Official minimal prompt / bash / editor schema or result strings | `src/dsh/official.ts` | `ref/deepseek-harness/apps/cli/config/agent-presets/minimal/` (pinned `47f9438`) |
-| Pro bootstrap → promote | `src/adapter/promotion.ts`, `src/adapter/activation.ts` | `ref/dsh-anchored-standard/README.md` → `preset/tool-bootstrap.mjs` → `preset/agent.cordis.yml` |
+| Pro bootstrap → promote / what lands in the system prompt | `src/adapter/promotion.ts`, `src/adapter/prompt.ts`, `src/adapter/activation.ts` | official minimal: `ref/deepseek-harness/apps/cli/config/agent-presets/minimal/agent.cordis.yml` (`complete: true`, no `dsh-agent-instructions` / `dsh-tool-skill`). Do not treat `ref/dsh-anchored-standard` as official minimal. |
 | Flash removal evidence / re-adding a Flash path | `runs/deepswe/RESULTS.md` (local), `CHANGELOG.md` v0.3.0 | `ref/dsh-routing-suite/preset/docs/experiments.md` (P21/P2/P9/P8-Flash) |
 | Settings TUI / `/dsh` | `src/settings/ui.ts`, `src/settings/command.ts` | `ref/pi-codex-conversion/src/codex-settings/` (interaction pattern only) |
 | Provider payload rewrite | `src/adapter/payload-rewrite.ts` | Pi `before_provider_request` types under `node_modules/@earendil-works/pi-coding-agent` |
@@ -128,7 +128,7 @@ git -C ref/dsh-routing-suite submodule update --init --recursive
 
 ```
 src/index.ts                 hooks + dump
-src/adapter/                 profile, promotion, payload, config
+src/adapter/                 profile, promotion, payload, prompt compose, config
 src/dsh/official.ts          official minimal strings/schemas (byte-stable)
 src/tools/                   persistent bash + str_replace_editor
 src/settings/                /dsh TUI
@@ -145,14 +145,44 @@ Config file at runtime: `~/.pi/agent/pi-dsh-minimal.json`.
   `str_replace_editor` descriptions and JSON schemas, and editor result
   strings were measured as written. Do not “improve” the wording. No
   `strict`, no `additionalProperties` on the official two-tool wire schemas.
-- **Pro request #1 must stay the official two-tool catalog.** Restoring
-  Pi tools too early (`read` / `edit` / `write` / …) is the failure
-  mode this package exists to prevent. Promotion is
-  `promoteOn: either` by default (first assistant message **or** tool
-  call). Compaction starts a new bootstrap epoch.
-- **After Pro promotion, keep the official persona.** Only the tool
-  catalog opens. Do not put Pi's identity / tools-guide / AGENTS.md
-  digest back into the system prompt.
+- **Pro request #1 must stay official minimal.** Wire surface =
+  `MINIMAL_PROMPT` + persistent `bash` + `str_replace_editor`. Official
+  DSH minimal (`complete: true`, `includeRuntimeContext: false`) does
+  **not** mount AGENTS.md or the skill catalog — do not put those on
+  request #1. Restoring Pi tools (`read` / `edit` / `write` / …) or Pi
+  identity (`You are an expert coding assistant operating inside pi…`)
+  too early is the failure mode this package exists to prevent.
+- **Request #1 blocking other extensions is the intended tradeoff.**
+  The *model* must not see hermes / hypa / MCP / skill-catalog additions
+  on the first provider request. That cannot be fixed without breaking
+  the measured anchor. Compensation is the promote step, not leaking
+  context into request #1. Bootstrap wipe is **wire-only**
+  (`before_provider_request`): do not `return { systemPrompt: MINIMAL_PROMPT }`
+  from `before_agent_start`, or later extensions' chained appends are
+  discarded before promote can reanchor them.
+- **Promote on `either` (default):** first durable assistant message
+  **or** first tool call. Compaction starts a new bootstrap epoch.
+  There is no extra notify message — the next provider request is the
+  notify (new tools + reanchored system).
+- **On the same request that opens Pi tools:** keep the official
+  persona as the first sentence. Reanchor Pi's already-assembled
+  prompt (do not rebuild a private one and drop other extensions).
+  Restore tools-guide, Pi docs paths, `<project_context>` (global +
+  project AGENTS.md / CLAUDE.md), and `<available_skills>`. Leave
+  later-extension appends (pi-hypa, pi-hermes-memory, …) in place.
+  Do **not** restore Pi's identity paragraph.
+- **Compaction does not eat the promote injections.** Those live in
+  the per-request system prompt, not in conversation messages. Pi
+  summarizes the dialogue only. After `session_compact` we bootstrap
+  again; the next promote re-injects workspace / docs / extension
+  appends from a fresh `before_agent_start` chain. Same-turn promote
+  (first reply already has a tool call) reanchors whatever was chained
+  this turn and fills AGENTS.md / skills / tools-guide if missing.
+- **Given the request-#1 constraint, this is the practice to keep.**
+  Do not stuff AGENTS.md / skills into the official persona on
+  request #1. Do not leave the session on the one-liner after
+  promote. Do not invent a Flash persona/guidance path. Do not move
+  the bootstrap wipe back into `before_agent_start`.
 - **Flash runs the Pro bootstrap (v0.3.1 default).** The v0.2.x weak
   persona + near-field guidance was removed in v0.3.0 (no DeepSWE lift;
   negative on related chains — see Background). Flash now matches

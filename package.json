@@ -1,6 +1,6 @@
 {
   "name": "pi-dsh-minimal",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "DeepSeek Harness adapter for Pi: V4 Pro + V4 Flash on the anchored-standard surface (first-turn two-tool schema, then Pi tools). Measured on DeepSWE.",
   "type": "module",
   "repository": {

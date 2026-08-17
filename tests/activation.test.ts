@@ -55,6 +55,18 @@ test("restoreTools drops str_replace_editor and keeps previous Pi tools", () => 
 	);
 });
 
+test("restoreTools keeps a replacement set from another extension", () => {
+	assert.deepEqual(restoreTools(["read", "bash", "edit", "write"], ["read"]), ["read"]);
+	assert.deepEqual(restoreTools(["read", "bash", "edit", "write"], ["read", "bash"]), ["read", "bash"]);
+});
+
+test("restoreTools on a pure bootstrap set restores the snapshot", () => {
+	assert.deepEqual(
+		restoreTools(["read", "bash", "edit", "write"], ["bash", "str_replace_editor"]),
+		["read", "bash", "edit", "write"],
+	);
+});
+
 test("stripOwnedTools only removes the editor", () => {
 	assert.deepEqual(stripOwnedTools(["read", "bash", "str_replace_editor"]), ["read", "bash"]);
 });

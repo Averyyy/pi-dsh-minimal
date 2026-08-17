@@ -67,8 +67,8 @@ unless `useOnAllModels` is on. Opt Flash out with
 
 | Phase | When | Surface |
 | --- | --- | --- |
-| Bootstrap (request #1) | New session, or first request after compaction | System prompt = `You are a helpful software engineer assistant.` Tools = official persistent `bash` + `str_replace_editor`. |
-| Promoted (later requests) | First durable **assistant message** or **tool call** (`promoteOn: either`) | Same official persona. **Pi's original tools** are restored. |
+| Bootstrap (request #1) | New session, or first request after compaction | System prompt = `You are a helpful software engineer assistant.` Tools = official persistent `bash` + `str_replace_editor`. No AGENTS.md, no skill catalog. |
+| Promoted (later requests) | First durable **assistant message** or **tool call** (`promoteOn: either`) | Official first sentence only — Pi identity stays out. Same request restores Pi tools, tools-guide, docs paths, `<project_context>`, `<available_skills>`, and other extensions' prompt additions. |
 | After compaction | `session_compact` | Falls back to bootstrap until a new promotion signal. |
 
 `/dsh promote either|tool-call|assistant-message` changes the signal.
@@ -167,8 +167,8 @@ after the catalog opens.
 1. Enable the extension and select DeepSeek V4 Pro.
 2. Ask a small edit (`main.py` prints hello; change it to world).
 3. The first thinking block should open with `We need…` / `I need…`, not `Let me…`.
-4. The first request should only expose `bash` and `str_replace_editor`.
-5. After the first assistant reply or tool call, later requests see Pi's original tools.
+4. The first request should only expose `bash` and `str_replace_editor`. The system prompt should be exactly the official one-liner.
+5. After the first assistant reply or tool call, later requests see Pi's original tools, and the skill catalog if `read` is on.
 
 **Flash**
 
@@ -190,8 +190,10 @@ npm run live:trajectory   # needs a configured DeepSeek V4 Pro model
   is the decisive variable; this package rewrites the provider payload so the
   model sees the official two-tool catalog even if TypeBox would have added
   `strict` or `additionalProperties`.
-- After promotion, only the official persona is still forced. Tools go back to
-  whatever Pi had (typically `read` / `bash` / `edit` / `write` / …).
+- After promotion, the official persona stays the **first sentence**. The
+  same request restores Pi tools, tools-guide, docs paths, AGENTS.md, and
+  the skill catalog, and keeps other extensions' system-prompt additions.
+  Pi identity is not restored.
 - During bootstrap, `bash` is a persistent process. `cd` and `export` stick
   until promotion, session end, or a 300s timeout reset.
 - `str_replace_editor` requires **absolute** paths, matching dsh.

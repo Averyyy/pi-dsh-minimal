@@ -67,6 +67,50 @@ test("rewriteMinimalProviderRequest maps Anthropic-style tool schemas", () => {
 	assert.deepEqual(tools[0]?.input_schema, DSH_BASH_PARAMETERS);
 });
 
+test("does not rewrite compaction summarization payloads", () => {
+	const payload = {
+		system: "You are a context summarization assistant. Your task is to read a conversation.",
+		messages: [
+			{
+				role: "user",
+				content: "<conversation>\nold turn\n</conversation>\n\nSummarize.",
+			},
+		],
+		tools: [{ type: "function", function: { name: "read" } }],
+	};
+	const rewritten = rewriteProviderRequest(payload, { persona: MINIMAL_PROMPT, rewriteTools: true });
+	assert.equal(rewritten, payload);
+	assert.equal((rewritten as { system: string }).system.includes("context summarization assistant"), true);
+});
+
+test("does not rewrite a compaction user turn even without the summarization system string", () => {
+	const payload = {
+		messages: [
+			{
+				role: "user",
+				content: "<conversation>\nhi\n</conversation>\n<previous-summary>\nprior\n</previous-summary>",
+			},
+		],
+	};
+	const rewritten = rewriteProviderRequest(payload, { persona: MINIMAL_PROMPT, rewriteTools: true });
+	assert.equal(rewritten, payload);
+});
+
+test("promoted Pro can keep AGENTS.md after the official persona", () => {
+	const persona = `${MINIMAL_PROMPT}\n\n<project_context>\n\nProject-specific instructions and guidelines:\n\n<project_instructions path="/proj/AGENTS.md">\nUse bun.\n</project_instructions>\n\n</project_context>\n`;
+	const rewritten = rewriteProviderRequest(
+		{
+			system: "Pi default prompt",
+			tools: [{ type: "function", function: { name: "read", parameters: { type: "object" } } }],
+		},
+		{ persona, rewriteTools: false },
+	);
+	const surface = extractRequestSurface(rewritten);
+	assert.ok(surface.system?.startsWith(MINIMAL_PROMPT));
+	assert.match(surface.system ?? "", /<project_instructions path="\/proj\/AGENTS\.md">/);
+	assert.deepEqual(surface.toolNames, ["read"]);
+});
+
 test("promoted Pro rewrites persona but leaves Pi tools", () => {
 	const rewritten = rewriteProviderRequest(
 		{

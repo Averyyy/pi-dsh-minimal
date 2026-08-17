@@ -4,9 +4,9 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { readDshMinimalConfig } from "./adapter/config.ts";
 import { resolveAdapterProfile, shouldUseAdapter, syncAdapter } from "./adapter/activation.ts";
 import { extractRequestSurface, rewriteProviderRequest } from "./adapter/payload-rewrite.ts";
-import { minimalSystemPrompt } from "./adapter/prompt.ts";
+import { composeAnchoredPrompt, promptResourcesFrom } from "./adapter/prompt.ts";
 import { isPromoted, scanSessionPhase } from "./adapter/promotion.ts";
-import { emptySessionPhase, type AdapterState } from "./adapter/state.ts";
+import { emptyPromptResources, emptySessionPhase, type AdapterState } from "./adapter/state.ts";
 import { restoreTools, stripOwnedTools } from "./adapter/tool-set.ts";
 import { registerDshCommand } from "./settings/command.ts";
 import { createPersistentBashSession } from "./tools/bash-session.ts";
@@ -43,6 +43,19 @@ function refreshPhase(pi: ExtensionAPI, ctx: ExtensionContext, state: AdapterSta
 	syncAdapter(pi, ctx, state);
 }
 
+function composeCurrentPrompt(
+	pi: { getActiveTools(): string[] },
+	state: AdapterState,
+	assembledPrompt?: string,
+): string {
+	return composeAnchoredPrompt({
+		...state.promptResources,
+		selectedTools: state.phase.promoted ? pi.getActiveTools() : state.promptResources.selectedTools,
+		includeWorkspace: state.phase.promoted,
+		assembledPrompt,
+	});
+}
+
 function noteUserText(state: AdapterState, text: string | undefined): void {
 	const trimmed = text?.trim();
 	if (!trimmed) return;
@@ -67,6 +80,7 @@ export default function dshMinimal(pi: ExtensionAPI) {
 		bashOverrideInstalled: false,
 		surface: "off",
 		phase: emptySessionPhase(),
+		promptResources: emptyPromptResources(),
 	};
 
 	registerStrReplaceEditorTool(pi);
@@ -77,6 +91,7 @@ export default function dshMinimal(pi: ExtensionAPI) {
 		state.shell.setCwd(ctx.cwd);
 		state.config = readDshMinimalConfig();
 		state.phase = emptySessionPhase();
+		state.promptResources = emptyPromptResources();
 		refreshPhase(pi, ctx, state);
 	});
 
@@ -106,7 +121,12 @@ export default function dshMinimal(pi: ExtensionAPI) {
 		noteUserText(state, _event.prompt);
 		refreshPhase(pi, ctx, state);
 		if (state.phase.profile === "inactive") return undefined;
-		return { systemPrompt: minimalSystemPrompt() };
+		state.promptResources = promptResourcesFrom(_event.systemPromptOptions);
+		// Bootstrap wipes only on the wire (before_provider_request). Do not
+		// replace the chained system prompt here, or later extensions' appends
+		// are gone before promote can reanchor them.
+		if (!state.phase.promoted) return undefined;
+		return { systemPrompt: composeCurrentPrompt(pi, state, _event.systemPrompt) };
 	});
 
 	pi.on("message_end", async (event, ctx) => {
@@ -123,8 +143,9 @@ export default function dshMinimal(pi: ExtensionAPI) {
 		refreshPhase(pi, ctx, state);
 		if (state.phase.profile === "inactive") return undefined;
 
+		const assembled = extractRequestSurface(event.payload).system ?? ctx.getSystemPrompt();
 		const rewritten = rewriteProviderRequest(event.payload, {
-			persona: minimalSystemPrompt(),
+			persona: composeCurrentPrompt(pi, state, assembled),
 			rewriteTools: state.phase.profile === "pro" && !state.phase.promoted,
 		});
 		const dump = dumpPath();

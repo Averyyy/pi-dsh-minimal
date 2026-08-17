@@ -5,12 +5,14 @@ import { resolveAdapterProfile, shouldUseAdapter, type AdapterProfile } from "./
 import type { AdapterState, ToolSurface } from "./state.ts";
 import {
 	ADAPTER_TOOL_NAMES,
+	BASH_TOOL_NAME,
 	buildStatusText,
 	DEFAULT_TOOL_NAMES,
 	restoreTools,
 	STATUS_KEY,
 	stripOwnedTools,
 } from "./tool-set.ts";
+import { MINIMAL_BASH_DESCRIPTION } from "../dsh/official.ts";
 import { registerDshBashTool } from "../tools/bash.ts";
 
 export { shouldUseAdapter, resolveAdapterProfile };
@@ -29,6 +31,7 @@ export function syncAdapter(pi: ExtensionAPI, ctx: ExtensionContext, state: Adap
 
 function applySurface(pi: ExtensionAPI, ctx: ExtensionContext, state: AdapterState, surface: ToolSurface): void {
 	if (surface === state.surface) {
+		if (surface === "off") deactivateOwnedTools(pi);
 		setStatus(ctx, state);
 		return;
 	}
@@ -38,6 +41,8 @@ function applySurface(pi: ExtensionAPI, ctx: ExtensionContext, state: AdapterSta
 	} else if (state.surface === "bootstrap") {
 		leaveBootstrap(pi, state);
 	}
+
+	if (surface === "off") deactivateOwnedTools(pi);
 
 	state.surface = surface;
 	state.enabled = surface !== "off";
@@ -57,12 +62,23 @@ function enterBootstrap(pi: ExtensionAPI, state: AdapterState): void {
 
 function leaveBootstrap(pi: ExtensionAPI, state: AdapterState): void {
 	if (state.bashOverrideInstalled) {
-		restorePiBash(pi, state.cwd);
+		if (bashStillOurs(pi)) restorePiBash(pi, state.cwd);
 		state.bashOverrideInstalled = false;
 	}
 	const previousToolNames =
 		state.previousToolNames && state.previousToolNames.length > 0 ? state.previousToolNames : DEFAULT_TOOL_NAMES;
 	pi.setActiveTools(restoreTools(previousToolNames, pi.getActiveTools()));
+}
+
+function deactivateOwnedTools(pi: ExtensionAPI): void {
+	const active = pi.getActiveTools();
+	const next = stripOwnedTools(active);
+	if (next.length !== active.length) pi.setActiveTools(next);
+}
+
+function bashStillOurs(pi: ExtensionAPI): boolean {
+	const bash = pi.getAllTools().find((tool) => tool.name === BASH_TOOL_NAME);
+	return !bash || bash.description === MINIMAL_BASH_DESCRIPTION;
 }
 
 function restorePiBash(pi: ExtensionAPI, cwd: string): void {
