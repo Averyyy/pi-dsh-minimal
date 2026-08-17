@@ -183,6 +183,15 @@ Config file at runtime: `~/.pi/agent/pi-dsh-minimal.json`.
   request #1. Do not leave the session on the one-liner after
   promote. Do not invent a Flash persona/guidance path. Do not move
   the bootstrap wipe back into `before_agent_start`.
+- **The promoted tools-guide must be rebuilt from the live catalog.**
+  `before_agent_start` captures `promptResources` at bootstrap time, when
+  `toolSnippets` are sparse/empty; reusing that snapshot on the promote
+  request made `formatToolsGuide` render `(none)` for the rest of the
+  current task (0.4.1 regression, fixed by `toolResourcesFromLiveTools` + a
+  `pi.getAllTools()` refresh inside `composeCurrentPrompt`). Until the next
+  fresh agent start, the only re-anchor happens per provider request, so the
+  promote path must source toolSnippets/promptGuidelines live — not from the
+  bootstrap snapshot.
 - **Flash runs the Pro bootstrap (v0.3.1 default).** The v0.2.x weak
   persona + near-field guidance was removed in v0.3.0 (no DeepSWE lift;
   negative on related chains — see Background). Flash now matches

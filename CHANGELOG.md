@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.4.1
+
+- **Fix: the promoted tools-guide no longer renders "(none)".** On promote,
+  `formatToolsGuide` reused the bootstrap-time resource snapshot, whose
+  `toolSnippets` are sparse/empty, so the re-anchored `Available tools:` list
+  stayed blank for the rest of the current task — the model kept leaning on
+  `bash` / `str_replace_editor` and never saw `read` / `write` / `edit` / `grep`.
+  `composeCurrentPrompt` now refreshes `toolSnippets` and `promptGuidelines`
+  from the live `pi.getAllTools()` catalog on each promoted request, so the
+  full tool list is advertised from the first promote round instead of waiting
+  for the next fresh agent start. Request #1 is unchanged (official one-liner + two tools).
+
 ## 0.4.0
 
 - **Keep the official persona as the first sentence, but stop stripping

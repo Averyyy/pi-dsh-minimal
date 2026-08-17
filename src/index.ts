@@ -4,7 +4,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { readDshMinimalConfig } from "./adapter/config.ts";
 import { resolveAdapterProfile, shouldUseAdapter, syncAdapter } from "./adapter/activation.ts";
 import { extractRequestSurface, rewriteProviderRequest } from "./adapter/payload-rewrite.ts";
-import { composeAnchoredPrompt, promptResourcesFrom } from "./adapter/prompt.ts";
+import { composeAnchoredPrompt, promptResourcesFrom, toolResourcesFromLiveTools } from "./adapter/prompt.ts";
 import { isPromoted, scanSessionPhase } from "./adapter/promotion.ts";
 import { emptyPromptResources, emptySessionPhase, type AdapterState } from "./adapter/state.ts";
 import { restoreTools, stripOwnedTools } from "./adapter/tool-set.ts";
@@ -44,12 +44,17 @@ function refreshPhase(pi: ExtensionAPI, ctx: ExtensionContext, state: AdapterSta
 }
 
 function composeCurrentPrompt(
-	pi: { getActiveTools(): string[] },
+	pi: ExtensionAPI,
 	state: AdapterState,
 	assembledPrompt?: string,
 ): string {
+	// On promote, refresh tools-guide inputs from the live catalog: the
+	// bootstrap-time snapshot may hold sparse/empty toolSnippets, which made
+	// the re-anchored guide render "(none)" for the rest of the first task.
+	const liveResources = state.phase.promoted ? toolResourcesFromLiveTools(pi.getAllTools()) : {};
 	return composeAnchoredPrompt({
 		...state.promptResources,
+		...liveResources,
 		selectedTools: state.phase.promoted ? pi.getActiveTools() : state.promptResources.selectedTools,
 		includeWorkspace: state.phase.promoted,
 		assembledPrompt,

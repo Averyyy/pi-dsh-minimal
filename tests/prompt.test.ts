@@ -9,8 +9,49 @@ import {
 	minimalSystemPrompt,
 	PI_IDENTITY,
 	reanchorPersona,
+	toolResourcesFromLiveTools,
 } from "../src/adapter/prompt.ts";
 import { MINIMAL_PROMPT } from "../src/dsh/official.ts";
+
+const liveTools = [
+	{ name: "read", description: "Read files", promptGuidelines: ["Use read to inspect files"] },
+	{ name: "bash", description: "Run commands", promptGuidelines: ["Use bash for ls, rg, find"] },
+	{ name: "write", description: "Write files", promptGuidelines: [] },
+];
+
+test("toolResourcesFromLiveTools builds snippets and guidelines from the live catalog", () => {
+	const resources = toolResourcesFromLiveTools(liveTools);
+	assert.equal(resources.toolSnippets?.["read"], "Read files");
+	assert.equal(resources.toolSnippets?.["bash"], "Run commands");
+	assert.deepEqual(resources.promptGuidelines, ["Use read to inspect files", "Use bash for ls, rg, find"]);
+});
+
+test("toolResourcesFromLiveTools dedupes guidelines and skips empty names", () => {
+	const resources = toolResourcesFromLiveTools([
+		{ name: "read", description: "R", promptGuidelines: ["g", "g"] },
+		{ name: "", description: "No name" },
+	] as never);
+	assert.deepEqual(resources.promptGuidelines, ["g"]);
+	assert.equal("" in (resources.toolSnippets ?? {}), false);
+});
+
+test("promoted compose lists live tools instead of \"(none)\" from a sparse bootstrap snapshot", () => {
+	// Mirrors the promoted request during the first task: the bootstrap-time
+	// snapshot has empty toolSnippets, so a naive re-anchor renders "(none)".
+	const prompt = composeAnchoredPrompt({
+		toolSnippets: {},
+		promptGuidelines: [],
+		selectedTools: ["read", "bash", "write"],
+		...toolResourcesFromLiveTools(liveTools),
+		includeWorkspace: true,
+		assembledPrompt: MINIMAL_PROMPT,
+	});
+	assert.match(prompt, /Available tools:/);
+	assert.doesNotMatch(prompt, /\(none\)/);
+	assert.match(prompt, /- read: Read files/);
+	assert.match(prompt, /- bash: Run commands/);
+	assert.match(prompt, /- write: Write files/);
+});
 
 const workspace = {
 	contextFiles: [

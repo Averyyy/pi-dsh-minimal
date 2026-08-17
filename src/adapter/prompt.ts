@@ -27,6 +27,34 @@ export interface PromptResources {
 	cwd?: string;
 }
 
+/** Input shape accepted by {@link toolResourcesFromLiveTools} (subset of pi's ToolInfo). */
+export interface LiveToolInfo {
+	name: string;
+	description?: string;
+	promptGuidelines?: readonly string[];
+}
+
+/**
+ * Rebuild tools-guide inputs from the live tool catalog (pi.getAllTools()).
+ * The bootstrap-time resource snapshot can carry sparse/empty toolSnippets,
+ * which made the promoted tools-guide render "(none)" until the next fresh
+ * agent start. Refreshing from the live catalog on promote fixes that.
+ */
+export function toolResourcesFromLiveTools(
+	tools: readonly LiveToolInfo[],
+): Pick<PromptResources, "toolSnippets" | "promptGuidelines"> {
+	const toolSnippets: Record<string, string> = {};
+	const promptGuidelines: string[] = [];
+	for (const tool of tools) {
+		if (!tool || !tool.name) continue;
+		if (tool.description) toolSnippets[tool.name] = tool.description;
+		for (const guideline of tool.promptGuidelines ?? []) {
+			if (guideline && !promptGuidelines.includes(guideline)) promptGuidelines.push(guideline);
+		}
+	}
+	return { toolSnippets, promptGuidelines };
+}
+
 export interface ComposeAnchoredPromptOptions extends PromptResources {
 	/**
 	 * After promotion: reanchor an existing assembled prompt (Pi + other
