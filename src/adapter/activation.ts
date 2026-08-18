@@ -7,8 +7,7 @@ import {
 	ADAPTER_TOOL_NAMES,
 	BASH_TOOL_NAME,
 	buildStatusText,
-	DEFAULT_TOOL_NAMES,
-	restoreTools,
+	restorePromotedTools,
 	STATUS_KEY,
 	stripOwnedTools,
 } from "./tool-set.ts";
@@ -65,9 +64,11 @@ function leaveBootstrap(pi: ExtensionAPI, state: AdapterState): void {
 		if (bashStillOurs(pi)) restorePiBash(pi, state.cwd);
 		state.bashOverrideInstalled = false;
 	}
-	const previousToolNames =
-		state.previousToolNames && state.previousToolNames.length > 0 ? state.previousToolNames : DEFAULT_TOOL_NAMES;
-	pi.setActiveTools(restoreTools(previousToolNames, pi.getActiveTools()));
+	// Restore the pre-bootstrap snapshot *plus* every tool currently registered.
+	// Extensions may register tools after the snapshot was taken; without this
+	// union those tools (web_search, fetch_content, subagent, …) would be
+	// dropped forever once promotion happens.
+	pi.setActiveTools(restorePromotedTools(state.previousToolNames ?? [], pi.getActiveTools(), pi.getAllTools()));
 }
 
 function deactivateOwnedTools(pi: ExtensionAPI): void {

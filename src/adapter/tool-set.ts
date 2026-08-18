@@ -62,3 +62,23 @@ export function restoreTools(
 
 	return current;
 }
+
+/**
+ * Tool names to expose after leaving bootstrap.
+ *
+ * Unlike the pre-bootstrap snapshot alone, this unions the snapshot with the
+ * live registered-tool catalog (`pi.getAllTools()`). Extension tools that were
+ * registered after the snapshot was taken (web search, MCP, subagents, …)
+ * therefore survive promotion instead of disappearing for the rest of the
+ * session.
+ */
+export function restorePromotedTools(
+	previousTools: string[],
+	activeTools: string[],
+	registeredTools: readonly { name: string }[],
+	ownedTools: string[] = ADAPTER_OWNED_TOOL_NAMES,
+): string[] {
+	const snapshot = previousTools.length > 0 ? previousTools : [...DEFAULT_TOOL_NAMES];
+	const allRegistered = registeredTools.map((tool) => tool.name);
+	return restoreTools(mergeToolNames(snapshot, allRegistered), activeTools, ownedTools);
+}

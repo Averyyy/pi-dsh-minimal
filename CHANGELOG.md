@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Fix: promotion restores every currently registered Pi tool, not just the pre-bootstrap snapshot.**
+  `leaveBootstrap` now unions the pre-bootstrap snapshot with the live `pi.getAllTools()` catalog,
+  so extension tools registered after the snapshot (web search, subagents, MCP, custom tools) survive
+  promotion instead of disappearing for the rest of the session. Request #1 stays official minimal.
+
 ## 0.4.1
 
 - **Fix: the promoted tools-guide no longer renders "(none)".** On promote,
