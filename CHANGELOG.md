@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Compatibility: the extension now loads and promotes on oh-my-pi.**
+  oh-my-pi's legacy pi-coding-agent shim does not export
+  `getReadmePath` / `getDocsPath` / `getExamplesPath`, which crashed the
+  extension at module load (`formatPiDocs`). The docs-path lookup is now
+  feature-detected (`resolvePiDocsPaths`); on hosts without the helpers the
+  promoted prompt simply omits the Pi docs block. The extension also
+  normalizes the harness shape differences: oh-my-pi passes the system
+  prompt as a `string[]` of segments (upstream pi: one `string`) in
+  `before_agent_start` and `ctx.getSystemPrompt()`, and expects a `string[]`
+  result — the adapter now echoes the incoming shape on promote.
+
 ## 0.4.1
 
 - **Fix: the promoted tools-guide no longer renders "(none)".** On promote,

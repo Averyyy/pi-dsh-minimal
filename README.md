@@ -198,6 +198,12 @@ npm run live:trajectory   # needs a configured DeepSeek V4 Pro model
   until promotion, session end, or a 300s timeout reset.
 - `str_replace_editor` requires **absolute** paths, matching dsh.
 - The extension performs no network requests and adds no telemetry.
+- **oh-my-pi (omp) works.** omp's legacy shim lacks `getReadmePath` /
+  `getDocsPath` / `getExamplesPath` and carries the system prompt as a
+  `string[]`; the adapter feature-detects the docs helpers (omitting the
+  Pi docs block there) and echoes the incoming system-prompt shape on
+  promote. The `/dsh` settings TUI needs the TUI host and is skipped in
+  headless runs.
 
 ## Related
 

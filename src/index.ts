@@ -4,7 +4,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { readDshMinimalConfig } from "./adapter/config.ts";
 import { resolveAdapterProfile, shouldUseAdapter, syncAdapter } from "./adapter/activation.ts";
 import { extractRequestSurface, rewriteProviderRequest } from "./adapter/payload-rewrite.ts";
-import { composeAnchoredPrompt, promptResourcesFrom, toolResourcesFromLiveTools } from "./adapter/prompt.ts";
+import { composeAnchoredPrompt, promptResourcesFrom, systemPromptText, toolResourcesFromLiveTools } from "./adapter/prompt.ts";
 import { isPromoted, scanSessionPhase } from "./adapter/promotion.ts";
 import { emptyPromptResources, emptySessionPhase, type AdapterState } from "./adapter/state.ts";
 import { restoreTools, stripOwnedTools } from "./adapter/tool-set.ts";
@@ -131,7 +131,12 @@ export default function dshMinimal(pi: ExtensionAPI) {
 		// replace the chained system prompt here, or later extensions' appends
 		// are gone before promote can reanchor them.
 		if (!state.phase.promoted) return undefined;
-		return { systemPrompt: composeCurrentPrompt(pi, state, _event.systemPrompt) };
+		const composed = composeCurrentPrompt(pi, state, systemPromptText(_event.systemPrompt));
+		// oh-my-pi carries the system prompt as a string[] and expects a string[]
+		// result; upstream pi uses plain strings. Echo the incoming shape.
+		return {
+			systemPrompt: (Array.isArray(_event.systemPrompt) ? [composed] : composed) as string,
+		};
 	});
 
 	pi.on("message_end", async (event, ctx) => {
@@ -148,7 +153,7 @@ export default function dshMinimal(pi: ExtensionAPI) {
 		refreshPhase(pi, ctx, state);
 		if (state.phase.profile === "inactive") return undefined;
 
-		const assembled = extractRequestSurface(event.payload).system ?? ctx.getSystemPrompt();
+		const assembled = extractRequestSurface(event.payload).system ?? systemPromptText(ctx.getSystemPrompt());
 		const rewritten = rewriteProviderRequest(event.payload, {
 			persona: composeCurrentPrompt(pi, state, assembled),
 			rewriteTools: state.phase.profile === "pro" && !state.phase.promoted,

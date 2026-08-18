@@ -1,4 +1,4 @@
-import { getDocsPath, getExamplesPath, getReadmePath } from "@earendil-works/pi-coding-agent";
+import * as piCodingAgent from "@earendil-works/pi-coding-agent";
 import { MINIMAL_PROMPT } from "../dsh/official.ts";
 
 /** First paragraph of Pi's default system prompt. Restoring this breaks the Pro anchor. */
@@ -104,6 +104,17 @@ export function isAnchoredSystemPrompt(value: string | undefined): boolean {
 }
 
 /**
+ * Normalize a harness-supplied system prompt. Upstream pi passes a single
+ * string; oh-my-pi passes the assembled prompt as a string[] of segments.
+ */
+export function systemPromptText(value: string | readonly string[] | undefined): string | undefined {
+	if (Array.isArray(value)) return value.join("\n\n");
+	// Array.isArray does not narrow readonly array types; the remaining union
+	// is string | undefined by construction.
+	return value as string | undefined;
+}
+
+/**
  * Keep the official first sentence. Drop Pi's identity paragraph when present.
  * Any later text — tools-guide, docs, AGENTS.md, skills, hermes/hypa appends —
  * stays.
@@ -187,15 +198,40 @@ ${guidelines}
 `;
 }
 
-export function formatPiDocs(): string {
-	const readmePath = getReadmePath();
-	const docsPath = getDocsPath();
-	const examplesPath = getExamplesPath();
+export interface PiDocsPaths {
+	readme: string;
+	docs: string;
+	examples: string;
+}
+
+/**
+ * Paths to Pi's bundled docs. oh-my-pi's legacy shim does not export
+ * getReadmePath/getDocsPath/getExamplesPath, so feature-detect: on such hosts
+ * the promoted prompt simply omits the Pi docs block instead of the extension
+ * crashing at module load (missing named export) or at call time.
+ */
+export function resolvePiDocsPaths(agent: unknown = piCodingAgent): PiDocsPaths | undefined {
+	const readme = (agent as Record<string, unknown>).getReadmePath;
+	const docs = (agent as Record<string, unknown>).getDocsPath;
+	const examples = (agent as Record<string, unknown>).getExamplesPath;
+	if (typeof readme !== "function" || typeof docs !== "function" || typeof examples !== "function") {
+		return undefined;
+	}
+	return {
+		readme: (readme as () => string)(),
+		docs: (docs as () => string)(),
+		examples: (examples as () => string)(),
+	};
+}
+
+export function formatPiDocs(agent: unknown = piCodingAgent): string {
+	const paths = resolvePiDocsPaths(agent);
+	if (!paths) return "";
 	return `
 Pi documentation (read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI):
-- Main documentation: ${readmePath}
-- Additional docs: ${docsPath}
-- Examples: ${examplesPath} (extensions, custom tools, SDK)
+- Main documentation: ${paths.readme}
+- Additional docs: ${paths.docs}
+- Examples: ${paths.examples} (extensions, custom tools, SDK)
 - When reading pi docs or examples, resolve docs/... under Additional docs and examples/... under Examples, not the current working directory
 - When asked about: extensions (docs/extensions.md, examples/extensions/), themes (docs/themes.md), skills (docs/skills.md), prompt templates (docs/prompt-templates.md), TUI components (docs/tui.md), keybindings (docs/keybindings.md), SDK integrations (docs/sdk.md), custom providers (docs/custom-provider.md), adding models (docs/models.md), pi packages (docs/packages.md), environment variables (docs/environment-variables.md)
 - When working on pi topics, read the docs and examples, and follow .md cross-references before implementing
