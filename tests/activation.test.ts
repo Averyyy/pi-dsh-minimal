@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_DSH_MINIMAL_CONFIG } from "../src/adapter/config.ts";
-import { desiredSurface, resolveAdapterProfile, shouldUseAdapter, syncAdapter } from "../src/adapter/activation.ts";
+import { desiredSurface, enforceBootstrapTools, resolveAdapterProfile, shouldUseAdapter, syncAdapter } from "../src/adapter/activation.ts";
 import { restorePromotedTools, restoreTools, stripOwnedTools } from "../src/adapter/tool-set.ts";
 import { emptyPromptResources, type AdapterState } from "../src/adapter/state.ts";
 
@@ -130,6 +130,84 @@ test("restorePromotedTools restores full catalog when bootstrap gained snapshot 
 	);
 });
 
+
+test("syncAdapter off->promoted restores built-in read/edit/write after reload", () => {
+	// /reload on an already-promoted session starts with surface "off"; Pi
+	// preserves the previous active base tools (which may be the restricted
+	// bootstrap leftovers), so dsh must restore the full registered catalog
+	// including built-ins that reload does not re-add on its own.
+	const registered = [
+		{ name: "read", description: "r", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "bash", description: "b", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "edit", description: "e", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "write", description: "w", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "web_search", description: "ws", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "str_replace_editor", description: "sre", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+	];
+	let lastSet: string[] | undefined;
+	const pi = {
+		getActiveTools: () => ["bash", "str_replace_editor", "find", "grep", "ls", "ask_user_question"],
+		getAllTools: () => registered,
+		setActiveTools: (names: string[]) => {
+			lastSet = names;
+		},
+		registerTool: () => undefined,
+	};
+	const ctx = {
+		model: { provider: "opencode-go", id: "deepseek-v4-flash" },
+		hasUI: false,
+		ui: { setStatus: () => undefined },
+	};
+	const state: AdapterState = {
+		enabled: true,
+		cwd: "/tmp",
+		config: { ...DEFAULT_DSH_MINIMAL_CONFIG },
+		shell: undefined as never,
+		bashOverrideInstalled: false,
+		surface: "off",
+		phase: {
+			profile: "pro",
+			promoted: true,
+			compactionSeq: -1,
+			userRounds: 1,
+			hasAssistant: true,
+			hasTool: false,
+		},
+		promptResources: emptyPromptResources(),
+	};
+	syncAdapter(pi as never, ctx as never, state);
+	assert.deepEqual(lastSet, ["read", "bash", "edit", "write", "web_search"]);
+});
+
+test("enforceBootstrapTools pins the active set to the two adapter tools while bootstrapping", () => {
+	const pi = {
+		getActiveTools: () => ["bash", "str_replace_editor", "find", "grep", "ls", "ask_user_question"],
+		setActiveTools: (names: string[]) => {
+			lastSet = names;
+		},
+	};
+	let lastSet: string[] | undefined;
+	const state = {
+		phase: { profile: "pro", promoted: false },
+	} as AdapterState;
+	enforceBootstrapTools(pi as never, state);
+	assert.deepEqual(lastSet, ["bash", "str_replace_editor"]);
+});
+
+test("enforceBootstrapTools does nothing after promotion", () => {
+	const pi = {
+		getActiveTools: () => ["read", "bash", "edit", "write", "web_search"],
+		setActiveTools: (names: string[]) => {
+			lastSet = names;
+		},
+	};
+	let lastSet: string[] | undefined;
+	const state = {
+		phase: { profile: "pro", promoted: true },
+	} as AdapterState;
+	enforceBootstrapTools(pi as never, state);
+	assert.equal(lastSet, undefined);
+});
 
 test("syncAdapter leaveBootstrap restores tools registered after the snapshot", () => {
 	const registered = [

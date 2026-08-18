@@ -9,6 +9,14 @@
   Also handles the real bootstrap shape where `pi-all-tools` / `ask_user_question` add a few tools on
   top of `bash` + `str_replace_editor`: those additions used to make `restoreTools` keep the small set
   instead of restoring the full catalog. Request #1 stays official minimal.
+- **Fix: reload/resume of an already-promoted session restores built-in read/edit/write.**
+  `/reload` keeps the previous active base tool names, so a session that had been through bootstrap
+  lost `read` / `edit` / `write` permanently. `applySurface` now runs the restore path for any
+  transition into `promoted` (not only `bootstrap -> promoted`).
+- **Fix: the bootstrap active set is pinned back to `bash` + `str_replace_editor`.**
+  Other extensions (pi-all-tools, ask_user_question, MCP) append tools during `before_agent_start`;
+  `before_provider_request` now re-asserts the official two-tool surface when not promoted, so the
+  first turn never exposes (or internally keeps) their additions.
 
 ## 0.4.1
 

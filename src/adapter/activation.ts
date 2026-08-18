@@ -37,7 +37,10 @@ function applySurface(pi: ExtensionAPI, ctx: ExtensionContext, state: AdapterSta
 
 	if (surface === "bootstrap") {
 		enterBootstrap(pi, state);
-	} else if (state.surface === "bootstrap") {
+	} else if (surface === "promoted") {
+		// Covers both bootstrap->promoted and off->promoted (reload/resume of an
+		// already-promoted session). Reload keeps the previous active base tools,
+		// so built-ins like read/edit/write must be restored explicitly.
 		leaveBootstrap(pi, state);
 	}
 
@@ -69,6 +72,20 @@ function leaveBootstrap(pi: ExtensionAPI, state: AdapterState): void {
 	// union those tools (web_search, fetch_content, subagent, …) would be
 	// dropped forever once promotion happens.
 	pi.setActiveTools(restorePromotedTools(state.previousToolNames ?? [], pi.getActiveTools(), pi.getAllTools()));
+}
+
+/**
+ * Re-assert the official two-tool surface right before the wire request.
+ *
+ * Other extensions (pi-all-tools, ask_user_question, MCP, ...) may append
+ * tools to the active set during before_agent_start. The bootstrap request
+ * must stay exactly bash + str_replace_editor, so after all those handlers
+ * have run we pin the active set back to the two adapter tools.
+ */
+export function enforceBootstrapTools(pi: ExtensionAPI, state: AdapterState): void {
+	if (state.phase.profile === "pro" && !state.phase.promoted) {
+		pi.setActiveTools([...ADAPTER_TOOL_NAMES]);
+	}
 }
 
 function deactivateOwnedTools(pi: ExtensionAPI): void {
