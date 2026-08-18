@@ -80,5 +80,18 @@ export function restorePromotedTools(
 ): string[] {
 	const snapshot = previousTools.length > 0 ? previousTools : [...DEFAULT_TOOL_NAMES];
 	const allRegistered = registeredTools.map((tool) => tool.name);
-	return restoreTools(mergeToolNames(snapshot, allRegistered), activeTools, ownedTools);
+	const merged = mergeToolNames(snapshot, allRegistered);
+
+	// If the adapter's own editor is still active, we are still on the
+	// bootstrap surface (possibly with a few tools added on top by other
+	// extensions such as pi-all-tools / ask_user_question). Those additions
+	// make restoreTools' "replacement set" branch fire even though the full
+	// catalog has not been restored yet, so force the full union here.
+	const stillBootstrapSurface =
+		activeTools.length === 0 ||
+		activeTools.every((name) => name === BASH_TOOL_NAME) ||
+		activeTools.includes(STR_REPLACE_EDITOR_TOOL_NAME);
+	if (stillBootstrapSurface) return stripOwnedTools(merged, ownedTools);
+
+	return restoreTools(merged, activeTools, ownedTools);
 }

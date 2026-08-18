@@ -103,6 +103,33 @@ test("restorePromotedTools keeps a replacement set from another extension", () =
 		["read"],
 	);
 });
+test("restorePromotedTools restores full catalog when bootstrap gained snapshot tools", () => {
+	// Real-world shape: during bootstrap pi-all-tools adds find/grep/ls and
+	// ask_user_question adds ask_user_question on top of bash+str_replace_editor.
+	// Those names are also in the snapshot, which used to make restoreTools keep
+	// the small set instead of restoring web_search/subagent etc.
+	const snapshot = ["read", "bash", "edit", "write", "find", "grep", "ls", "ask_user_question"];
+	const activeDuringBootstrap = ["bash", "str_replace_editor", "find", "grep", "ls", "ask_user_question"];
+	const registeredNow = [
+		{ name: "read" },
+		{ name: "bash" },
+		{ name: "edit" },
+		{ name: "write" },
+		{ name: "find" },
+		{ name: "grep" },
+		{ name: "ls" },
+		{ name: "ask_user_question" },
+		{ name: "web_search" },
+		{ name: "fetch_content" },
+		{ name: "subagent" },
+		{ name: "str_replace_editor" },
+	];
+	assert.deepEqual(
+		restorePromotedTools(snapshot, activeDuringBootstrap, registeredNow),
+		["read", "bash", "edit", "write", "find", "grep", "ls", "ask_user_question", "web_search", "fetch_content", "subagent"],
+	);
+});
+
 
 test("syncAdapter leaveBootstrap restores tools registered after the snapshot", () => {
 	const registered = [
@@ -110,11 +137,15 @@ test("syncAdapter leaveBootstrap restores tools registered after the snapshot", 
 		{ name: "bash", description: "b", parameters: {}, promptGuidelines: [], sourceInfo: {} },
 		{ name: "edit", description: "e", parameters: {}, promptGuidelines: [], sourceInfo: {} },
 		{ name: "write", description: "w", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "find", description: "f", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "grep", description: "g", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "ls", description: "l", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "ask_user_question", description: "a", parameters: {}, promptGuidelines: [], sourceInfo: {} },
 		{ name: "web_search", description: "ws", parameters: {}, promptGuidelines: [], sourceInfo: {} },
 	];
 	let lastSet: string[] | undefined;
 	const pi = {
-		getActiveTools: () => ["bash", "str_replace_editor"],
+		getActiveTools: () => ["bash", "str_replace_editor", "find", "grep", "ls", "ask_user_question"],
 		getAllTools: () => registered,
 		setActiveTools: (names: string[]) => {
 			lastSet = names;
@@ -129,7 +160,7 @@ test("syncAdapter leaveBootstrap restores tools registered after the snapshot", 
 	const state: AdapterState = {
 		enabled: true,
 		cwd: "/tmp",
-		previousToolNames: ["read", "bash", "edit", "write"],
+		previousToolNames: ["read", "bash", "edit", "write", "find", "grep", "ls", "ask_user_question"],
 		config: { ...DEFAULT_DSH_MINIMAL_CONFIG },
 		shell: undefined as never,
 		bashOverrideInstalled: false,
@@ -145,5 +176,5 @@ test("syncAdapter leaveBootstrap restores tools registered after the snapshot", 
 		promptResources: emptyPromptResources(),
 	};
 	syncAdapter(pi as never, ctx as never, state);
-	assert.deepEqual(lastSet, ["read", "bash", "edit", "write", "web_search"]);
+	assert.deepEqual(lastSet, ["read", "bash", "edit", "write", "find", "grep", "ls", "ask_user_question", "web_search"]);
 });

@@ -5,7 +5,10 @@
 - **Fix: promotion restores every currently registered Pi tool, not just the pre-bootstrap snapshot.**
   `leaveBootstrap` now unions the pre-bootstrap snapshot with the live `pi.getAllTools()` catalog,
   so extension tools registered after the snapshot (web search, subagents, MCP, custom tools) survive
-  promotion instead of disappearing for the rest of the session. Request #1 stays official minimal.
+  promotion instead of disappearing for the rest of the session.
+  Also handles the real bootstrap shape where `pi-all-tools` / `ask_user_question` add a few tools on
+  top of `bash` + `str_replace_editor`: those additions used to make `restoreTools` keep the small set
+  instead of restoring the full catalog. Request #1 stays official minimal.
 
 ## 0.4.1
 
