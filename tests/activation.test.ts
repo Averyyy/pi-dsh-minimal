@@ -209,6 +209,58 @@ test("enforceBootstrapTools does nothing after promotion", () => {
 	assert.equal(lastSet, undefined);
 });
 
+test("syncAdapter bootstrap->off restores the full catalog when the model no longer matches", () => {
+	const registered = [
+		{ name: "read", description: "r", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "bash", description: "b", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "edit", description: "e", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "write", description: "w", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "find", description: "f", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "grep", description: "g", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "ls", description: "l", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "ask_user_question", description: "a", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "web_search", description: "ws", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+	];
+	let lastSet: string[] | undefined;
+	let active: string[] = ["bash", "str_replace_editor"];
+	const pi = {
+		getActiveTools: () => active,
+		getAllTools: () => registered,
+		setActiveTools: (names: string[]) => {
+			active = names;
+			lastSet = names;
+		},
+		registerTool: () => undefined,
+	};
+	const ctx = {
+		model: { provider: "enterprise", id: "glm-5.3" },
+		hasUI: false,
+		ui: { setStatus: () => undefined },
+	};
+	const state: AdapterState = {
+		enabled: true,
+		cwd: "/tmp",
+		previousToolNames: ["read", "bash", "edit", "write", "find", "grep", "ls", "ask_user_question"],
+		config: { ...DEFAULT_DSH_MINIMAL_CONFIG },
+		shell: undefined as never,
+		bashOverrideInstalled: true,
+		surface: "bootstrap",
+		phase: {
+			profile: "pro",
+			promoted: false,
+			compactionSeq: -1,
+			userRounds: 0,
+			hasAssistant: false,
+			hasTool: false,
+		},
+		promptResources: emptyPromptResources(),
+	};
+	syncAdapter(pi as never, ctx as never, state);
+	assert.deepEqual(lastSet, ["read", "bash", "edit", "write", "find", "grep", "ls", "ask_user_question", "web_search"]);
+	assert.equal(state.surface, "off");
+	assert.equal(state.enabled, false);
+});
+
 test("syncAdapter leaveBootstrap restores tools registered after the snapshot", () => {
 	const registered = [
 		{ name: "read", description: "r", parameters: {}, promptGuidelines: [], sourceInfo: {} },

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Fix: switching away from a matching model before the first turn no longer strands the session on the adapter's bash.**
+  `applySurface` now runs the full `leaveBootstrap` restore when the profile goes `bootstrap -> off`
+  (e.g. `deepseek-v4-flash` selected at session start, then switched to `glm-5.3` before any request).
+  Previously only `str_replace_editor` was dropped, leaving the dsh bash override active and hiding
+  `read` / `edit` / `write` / web tools for the rest of the session.
 - **Fix: promotion restores every currently registered Pi tool, not just the pre-bootstrap snapshot.**
   `leaveBootstrap` now unions the pre-bootstrap snapshot with the live `pi.getAllTools()` catalog,
   so extension tools registered after the snapshot (web search, subagents, MCP, custom tools) survive

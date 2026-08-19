@@ -42,6 +42,11 @@ function applySurface(pi: ExtensionAPI, ctx: ExtensionContext, state: AdapterSta
 		// already-promoted session). Reload keeps the previous active base tools,
 		// so built-ins like read/edit/write must be restored explicitly.
 		leaveBootstrap(pi, state);
+	} else if (surface === "off" && state.surface === "bootstrap") {
+		// Model/config changed to inactive while still on the two-tool bootstrap
+		// surface (e.g. deepseek -> glm before the first turn). Restore the full
+		// catalog and Pi bash instead of leaving only the adapter's bash behind.
+		leaveBootstrap(pi, state);
 	}
 
 	if (surface === "off") deactivateOwnedTools(pi);
