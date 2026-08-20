@@ -62,3 +62,36 @@ export function restoreTools(
 
 	return current;
 }
+
+/**
+ * Tool names to expose after leaving bootstrap.
+ *
+ * Unlike the pre-bootstrap snapshot alone, this unions the snapshot with the
+ * live registered-tool catalog (`pi.getAllTools()`). Extension tools that were
+ * registered after the snapshot was taken (web search, MCP, subagents, …)
+ * therefore survive promotion instead of disappearing for the rest of the
+ * session.
+ */
+export function restorePromotedTools(
+	previousTools: string[],
+	activeTools: string[],
+	registeredTools: readonly { name: string }[],
+	ownedTools: string[] = ADAPTER_OWNED_TOOL_NAMES,
+): string[] {
+	const snapshot = previousTools.length > 0 ? previousTools : [...DEFAULT_TOOL_NAMES];
+	const allRegistered = registeredTools.map((tool) => tool.name);
+	const merged = mergeToolNames(snapshot, allRegistered);
+
+	// If the adapter's own editor is still active, we are still on the
+	// bootstrap surface (possibly with a few tools added on top by other
+	// extensions such as pi-all-tools / ask_user_question). Those additions
+	// make restoreTools' "replacement set" branch fire even though the full
+	// catalog has not been restored yet, so force the full union here.
+	const stillBootstrapSurface =
+		activeTools.length === 0 ||
+		activeTools.every((name) => name === BASH_TOOL_NAME) ||
+		activeTools.includes(STR_REPLACE_EDITOR_TOOL_NAME);
+	if (stillBootstrapSurface) return stripOwnedTools(merged, ownedTools);
+
+	return restoreTools(merged, activeTools, ownedTools);
+}

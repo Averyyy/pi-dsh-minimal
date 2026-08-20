@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_DSH_MINIMAL_CONFIG } from "../src/adapter/config.ts";
-import { desiredSurface, resolveAdapterProfile, shouldUseAdapter } from "../src/adapter/activation.ts";
-import { restoreTools, stripOwnedTools } from "../src/adapter/tool-set.ts";
+import { desiredSurface, enforceBootstrapTools, resolveAdapterProfile, shouldUseAdapter, syncAdapter } from "../src/adapter/activation.ts";
+import { restorePromotedTools, restoreTools, stripOwnedTools } from "../src/adapter/tool-set.ts";
+import { emptyPromptResources, type AdapterState } from "../src/adapter/state.ts";
 
 function ctx(id: string, name?: string) {
 	return { model: { provider: "opencode-go", id, name } };
@@ -69,4 +70,241 @@ test("restoreTools on a pure bootstrap set restores the snapshot", () => {
 
 test("stripOwnedTools only removes the editor", () => {
 	assert.deepEqual(stripOwnedTools(["read", "bash", "str_replace_editor"]), ["read", "bash"]);
+});
+
+test("restorePromotedTools keeps extension tools registered after the snapshot", () => {
+	const snapshot = ["read", "bash", "edit", "write"]; // taken before web-access/subagent loaded
+	const activeDuringBootstrap = ["bash", "str_replace_editor"];
+	const registeredNow = [
+		{ name: "read" },
+		{ name: "bash" },
+		{ name: "edit" },
+		{ name: "write" },
+		{ name: "web_search" },
+		{ name: "fetch_content" },
+		{ name: "source_check" },
+		{ name: "get_search_content" },
+		{ name: "subagent" },
+		{ name: "str_replace_editor" }, // owned by the adapter; must stay hidden
+	];
+	assert.deepEqual(
+		restorePromotedTools(snapshot, activeDuringBootstrap, registeredNow),
+		["read", "bash", "edit", "write", "web_search", "fetch_content", "source_check", "get_search_content", "subagent"],
+	);
+});
+
+test("restorePromotedTools falls back to defaults when no snapshot exists", () => {
+	assert.deepEqual(restorePromotedTools([], ["bash", "str_replace_editor"], []), ["read", "bash", "edit", "write"]);
+});
+
+test("restorePromotedTools keeps a replacement set from another extension", () => {
+	assert.deepEqual(
+		restorePromotedTools(["read", "bash", "edit", "write"], ["read"], [{ name: "read" }, { name: "bash" }]),
+		["read"],
+	);
+});
+test("restorePromotedTools restores full catalog when bootstrap gained snapshot tools", () => {
+	// Real-world shape: during bootstrap pi-all-tools adds find/grep/ls and
+	// ask_user_question adds ask_user_question on top of bash+str_replace_editor.
+	// Those names are also in the snapshot, which used to make restoreTools keep
+	// the small set instead of restoring web_search/subagent etc.
+	const snapshot = ["read", "bash", "edit", "write", "find", "grep", "ls", "ask_user_question"];
+	const activeDuringBootstrap = ["bash", "str_replace_editor", "find", "grep", "ls", "ask_user_question"];
+	const registeredNow = [
+		{ name: "read" },
+		{ name: "bash" },
+		{ name: "edit" },
+		{ name: "write" },
+		{ name: "find" },
+		{ name: "grep" },
+		{ name: "ls" },
+		{ name: "ask_user_question" },
+		{ name: "web_search" },
+		{ name: "fetch_content" },
+		{ name: "subagent" },
+		{ name: "str_replace_editor" },
+	];
+	assert.deepEqual(
+		restorePromotedTools(snapshot, activeDuringBootstrap, registeredNow),
+		["read", "bash", "edit", "write", "find", "grep", "ls", "ask_user_question", "web_search", "fetch_content", "subagent"],
+	);
+});
+
+
+test("syncAdapter off->promoted restores built-in read/edit/write after reload", () => {
+	// /reload on an already-promoted session starts with surface "off"; Pi
+	// preserves the previous active base tools (which may be the restricted
+	// bootstrap leftovers), so dsh must restore the full registered catalog
+	// including built-ins that reload does not re-add on its own.
+	const registered = [
+		{ name: "read", description: "r", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "bash", description: "b", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "edit", description: "e", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "write", description: "w", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "web_search", description: "ws", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "str_replace_editor", description: "sre", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+	];
+	let lastSet: string[] | undefined;
+	const pi = {
+		getActiveTools: () => ["bash", "str_replace_editor", "find", "grep", "ls", "ask_user_question"],
+		getAllTools: () => registered,
+		setActiveTools: (names: string[]) => {
+			lastSet = names;
+		},
+		registerTool: () => undefined,
+	};
+	const ctx = {
+		model: { provider: "opencode-go", id: "deepseek-v4-flash" },
+		hasUI: false,
+		ui: { setStatus: () => undefined },
+	};
+	const state: AdapterState = {
+		enabled: true,
+		cwd: "/tmp",
+		config: { ...DEFAULT_DSH_MINIMAL_CONFIG },
+		shell: undefined as never,
+		bashOverrideInstalled: false,
+		surface: "off",
+		phase: {
+			profile: "pro",
+			promoted: true,
+			compactionSeq: -1,
+			userRounds: 1,
+			hasAssistant: true,
+			hasTool: false,
+		},
+		promptResources: emptyPromptResources(),
+	};
+	syncAdapter(pi as never, ctx as never, state);
+	assert.deepEqual(lastSet, ["read", "bash", "edit", "write", "web_search"]);
+});
+
+test("enforceBootstrapTools pins the active set to the two adapter tools while bootstrapping", () => {
+	const pi = {
+		getActiveTools: () => ["bash", "str_replace_editor", "find", "grep", "ls", "ask_user_question"],
+		setActiveTools: (names: string[]) => {
+			lastSet = names;
+		},
+	};
+	let lastSet: string[] | undefined;
+	const state = {
+		phase: { profile: "pro", promoted: false },
+	} as AdapterState;
+	enforceBootstrapTools(pi as never, state);
+	assert.deepEqual(lastSet, ["bash", "str_replace_editor"]);
+});
+
+test("enforceBootstrapTools does nothing after promotion", () => {
+	const pi = {
+		getActiveTools: () => ["read", "bash", "edit", "write", "web_search"],
+		setActiveTools: (names: string[]) => {
+			lastSet = names;
+		},
+	};
+	let lastSet: string[] | undefined;
+	const state = {
+		phase: { profile: "pro", promoted: true },
+	} as AdapterState;
+	enforceBootstrapTools(pi as never, state);
+	assert.equal(lastSet, undefined);
+});
+
+test("syncAdapter bootstrap->off restores the full catalog when the model no longer matches", () => {
+	const registered = [
+		{ name: "read", description: "r", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "bash", description: "b", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "edit", description: "e", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "write", description: "w", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "find", description: "f", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "grep", description: "g", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "ls", description: "l", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "ask_user_question", description: "a", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "web_search", description: "ws", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+	];
+	let lastSet: string[] | undefined;
+	let active: string[] = ["bash", "str_replace_editor"];
+	const pi = {
+		getActiveTools: () => active,
+		getAllTools: () => registered,
+		setActiveTools: (names: string[]) => {
+			active = names;
+			lastSet = names;
+		},
+		registerTool: () => undefined,
+	};
+	const ctx = {
+		model: { provider: "enterprise", id: "glm-5.3" },
+		hasUI: false,
+		ui: { setStatus: () => undefined },
+	};
+	const state: AdapterState = {
+		enabled: true,
+		cwd: "/tmp",
+		previousToolNames: ["read", "bash", "edit", "write", "find", "grep", "ls", "ask_user_question"],
+		config: { ...DEFAULT_DSH_MINIMAL_CONFIG },
+		shell: undefined as never,
+		bashOverrideInstalled: true,
+		surface: "bootstrap",
+		phase: {
+			profile: "pro",
+			promoted: false,
+			compactionSeq: -1,
+			userRounds: 0,
+			hasAssistant: false,
+			hasTool: false,
+		},
+		promptResources: emptyPromptResources(),
+	};
+	syncAdapter(pi as never, ctx as never, state);
+	assert.deepEqual(lastSet, ["read", "bash", "edit", "write", "find", "grep", "ls", "ask_user_question", "web_search"]);
+	assert.equal(state.surface, "off");
+	assert.equal(state.enabled, false);
+});
+
+test("syncAdapter leaveBootstrap restores tools registered after the snapshot", () => {
+	const registered = [
+		{ name: "read", description: "r", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "bash", description: "b", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "edit", description: "e", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "write", description: "w", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "find", description: "f", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "grep", description: "g", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "ls", description: "l", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "ask_user_question", description: "a", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+		{ name: "web_search", description: "ws", parameters: {}, promptGuidelines: [], sourceInfo: {} },
+	];
+	let lastSet: string[] | undefined;
+	const pi = {
+		getActiveTools: () => ["bash", "str_replace_editor", "find", "grep", "ls", "ask_user_question"],
+		getAllTools: () => registered,
+		setActiveTools: (names: string[]) => {
+			lastSet = names;
+		},
+		registerTool: () => undefined,
+	};
+	const ctx = {
+		model: { provider: "opencode-go", id: "deepseek-v4-flash" },
+		hasUI: false,
+		ui: { setStatus: () => undefined },
+	};
+	const state: AdapterState = {
+		enabled: true,
+		cwd: "/tmp",
+		previousToolNames: ["read", "bash", "edit", "write", "find", "grep", "ls", "ask_user_question"],
+		config: { ...DEFAULT_DSH_MINIMAL_CONFIG },
+		shell: undefined as never,
+		bashOverrideInstalled: false,
+		surface: "bootstrap",
+		phase: {
+			profile: "pro",
+			promoted: true,
+			compactionSeq: -1,
+			userRounds: 1,
+			hasAssistant: true,
+			hasTool: false,
+		},
+		promptResources: emptyPromptResources(),
+	};
+	syncAdapter(pi as never, ctx as never, state);
+	assert.deepEqual(lastSet, ["read", "bash", "edit", "write", "find", "grep", "ls", "ask_user_question", "web_search"]);
 });
