@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.4.2
+
+- **Recover DeepSeek V4 DSML calls leaked as assistant text.** While the
+  anchored profile is active, finalized official `<｜DSML｜tool_calls>` output,
+  legacy bare `<invoke>` output, and the observed hosted `tool_calls store:`
+  corruption are converted into Pi-native `toolCall` content before the agent
+  loop dispatches tools. Only names in Pi's current active-tool catalog are
+  converted. Complete calls keep typed DSML parameters; unknown, incomplete,
+  or invalid calls remain visible text and are never synthesized or executed.
+
 ## 0.4.1
 
 - **Fix: the promoted tools-guide no longer renders "(none)".** On promote,

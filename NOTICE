@@ -13,6 +13,15 @@ That official `minimal` surface is:
 including the official tool descriptions, JSON parameter schemas, and
 the editor's view / create / str_replace / insert result strings.
 
+The DSML grammar and typed-parameter convention used by the assistant-text
+recovery parser follow DeepSeek's official V4 encoding reference:
+
+  https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731/tree/7872f01b1d1fe23eabc4c98b48bffcef5a386062/encoding
+
+That encoding reference is distributed under the MIT License:
+
+  Copyright (c) 2023 DeepSeek
+
 The V4 Pro two-phase schedule follows the measured
 `dsh-anchored-standard` bootstrap (first request = official two-tool
 schema, later requests restore the host catalog after a durable
