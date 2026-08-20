@@ -34,64 +34,22 @@ export function stripOwnedTools(toolNames: string[], ownedTools: string[] = ADAP
 /**
  * Tools to expose after leaving bootstrap.
  *
- * - Still on the two-tool set (plus optional newly registered names): restore
- *   the pre-bootstrap snapshot and keep those extras.
- * - Another extension replaced the set (plan mode, preset): keep that set.
+ * The adapter editor marks the bootstrap surface. Restore the captured Pi
+ * selection and retain only tools that became active on that surface. Once
+ * the editor is absent, another extension has replaced the selection, so keep
+ * its active set unchanged.
  */
 export function restoreTools(
-	previousTools: string[],
+	previousTools: string[] | undefined,
 	activeTools: string[],
 	ownedTools: string[] = ADAPTER_OWNED_TOOL_NAMES,
 ): string[] {
-	const previous = stripOwnedTools(previousTools, ownedTools);
 	const current = stripOwnedTools(activeTools, ownedTools);
-	const fallback = previous.length > 0 ? previous : [...DEFAULT_TOOL_NAMES];
+	if (!activeTools.includes(STR_REPLACE_EDITOR_TOOL_NAME)) return current;
 
-	const stillBootstrap =
-		current.length === 0 || current.every((name) => name === BASH_TOOL_NAME);
-	if (stillBootstrap) return fallback;
-
-	const extras = current.filter((name) => name !== BASH_TOOL_NAME && !previous.includes(name));
-	const hasOriginalNonBash = current.some((name) => name !== BASH_TOOL_NAME && previous.includes(name));
-	const bootstrapPlusAdds =
-		!hasOriginalNonBash &&
-		current.includes(BASH_TOOL_NAME) &&
-		extras.length > 0 &&
-		current.every((name) => name === BASH_TOOL_NAME || extras.includes(name));
-	if (bootstrapPlusAdds) return mergeToolNames(previous.length > 0 ? previous : DEFAULT_TOOL_NAMES, extras);
-
-	return current;
-}
-
-/**
- * Tool names to expose after leaving bootstrap.
- *
- * Unlike the pre-bootstrap snapshot alone, this unions the snapshot with the
- * live registered-tool catalog (`pi.getAllTools()`). Extension tools that were
- * registered after the snapshot was taken (web search, MCP, subagents, …)
- * therefore survive promotion instead of disappearing for the rest of the
- * session.
- */
-export function restorePromotedTools(
-	previousTools: string[],
-	activeTools: string[],
-	registeredTools: readonly { name: string }[],
-	ownedTools: string[] = ADAPTER_OWNED_TOOL_NAMES,
-): string[] {
-	const snapshot = previousTools.length > 0 ? previousTools : [...DEFAULT_TOOL_NAMES];
-	const allRegistered = registeredTools.map((tool) => tool.name);
-	const merged = mergeToolNames(snapshot, allRegistered);
-
-	// If the adapter's own editor is still active, we are still on the
-	// bootstrap surface (possibly with a few tools added on top by other
-	// extensions such as pi-all-tools / ask_user_question). Those additions
-	// make restoreTools' "replacement set" branch fire even though the full
-	// catalog has not been restored yet, so force the full union here.
-	const stillBootstrapSurface =
-		activeTools.length === 0 ||
-		activeTools.every((name) => name === BASH_TOOL_NAME) ||
-		activeTools.includes(STR_REPLACE_EDITOR_TOOL_NAME);
-	if (stillBootstrapSurface) return stripOwnedTools(merged, ownedTools);
-
-	return restoreTools(merged, activeTools, ownedTools);
+	const snapshot = previousTools === undefined
+		? [...DEFAULT_TOOL_NAMES]
+		: stripOwnedTools(previousTools, ownedTools);
+	const additions = current.filter((name) => name !== BASH_TOOL_NAME && !snapshot.includes(name));
+	return mergeToolNames(snapshot, additions);
 }
