@@ -3,12 +3,15 @@ import assert from "node:assert/strict";
 import {
 	composeAnchoredPrompt,
 	ensurePromotedSurface,
+	formatPiDocs,
 	formatProjectContext,
 	formatSkillsSection,
 	isAnchoredSystemPrompt,
 	minimalSystemPrompt,
 	PI_IDENTITY,
 	reanchorPersona,
+	resolvePiDocsPaths,
+	systemPromptText,
 	toolResourcesFromLiveTools,
 } from "../src/adapter/prompt.ts";
 import { MINIMAL_PROMPT } from "../src/dsh/official.ts";
@@ -126,4 +129,34 @@ test("minimalSystemPrompt stays the official one-liner", () => {
 	assert.equal(minimalSystemPrompt(), MINIMAL_PROMPT);
 	assert.equal(formatProjectContext([]), "");
 	assert.equal(formatSkillsSection([]), "");
+});
+
+test("resolvePiDocsPaths returns undefined when the host lacks the docs helpers", () => {
+	// oh-my-pi's legacy shim exports neither getReadmePath nor getDocsPath.
+	assert.equal(resolvePiDocsPaths({}), undefined);
+	assert.equal(resolvePiDocsPaths({ getReadmePath: () => "/r" }), undefined);
+	assert.equal(resolvePiDocsPaths({ getDocsPath: () => "/d" }), undefined);
+});
+
+test("resolvePiDocsPaths reads the three paths from the host agent", () => {
+	const agent = {
+		getReadmePath: () => "/readme",
+		getDocsPath: () => "/docs",
+		getExamplesPath: () => "/examples",
+	};
+	assert.deepEqual(resolvePiDocsPaths(agent), { readme: "/readme", docs: "/docs", examples: "/examples" });
+});
+
+test("formatPiDocs omits the docs block when the host lacks the docs helpers", () => {
+	// oh-my-pi degradation: promoted surface must not mention Pi documentation
+	// when the host exports none of the three path helpers.
+	assert.equal(formatPiDocs({}), "");
+	assert.doesNotMatch(formatPiDocs({}), /Pi documentation/);
+});
+
+test("systemPromptText normalizes the oh-my-pi string[] form", () => {
+	assert.equal(systemPromptText(["a", "b"]), "a\n\nb");
+	assert.equal(systemPromptText("single"), "single");
+	assert.equal(systemPromptText(undefined), undefined);
+	assert.equal(systemPromptText([]), "");
 });

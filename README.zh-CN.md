@@ -187,6 +187,11 @@ npm run live:trajectory   # 需要已配置 DeepSeek V4 Pro
   原生工具调用。未知、未闭合或参数无效的标记仍保留为文字，不会执行。
 - `str_replace_editor` 要求 **绝对路径**，与 dsh 一致。
 - 扩展不发起网络请求，也不增加遥测。
+- **兼容 oh-my-pi (omp)**。omp 的 legacy shim 不导出 `getReadmePath` /
+  `getDocsPath` / `getExamplesPath`，且 system prompt 以 `string[]` 传递；
+  适配器对文档路径做特性检测（缺失时晋升后的 prompt 省略 Pi 文档块），
+  并在晋升时按宿主的 system prompt 形状回写。`/dsh` 设置界面需要 TUI
+  宿主，无头模式自动跳过。
 
 ## 相关项目
 

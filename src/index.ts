@@ -5,7 +5,7 @@ import { readDshMinimalConfig } from "./adapter/config.ts";
 import { enforceBootstrapTools, resolveAdapterProfile, shouldUseAdapter, syncAdapter } from "./adapter/activation.ts";
 import { extractRequestSurface, rewriteProviderRequest } from "./adapter/payload-rewrite.ts";
 import { convertDsmlAssistantMessage } from "./adapter/dsml.ts";
-import { composeAnchoredPrompt, promptResourcesFrom, toolResourcesFromLiveTools } from "./adapter/prompt.ts";
+import { composeAnchoredPrompt, promptResourcesFrom, systemPromptText, toolResourcesFromLiveTools } from "./adapter/prompt.ts";
 import { isPromoted, scanSessionPhase } from "./adapter/promotion.ts";
 import { emptyPromptResources, emptySessionPhase, type AdapterState } from "./adapter/state.ts";
 import { restoreTools, stripOwnedTools } from "./adapter/tool-set.ts";
@@ -132,7 +132,12 @@ export default function dshMinimal(pi: ExtensionAPI) {
 		// replace the chained system prompt here, or later extensions' appends
 		// are gone before promote can reanchor them.
 		if (!state.phase.promoted) return undefined;
-		return { systemPrompt: composeCurrentPrompt(pi, state, _event.systemPrompt) };
+		const composed = composeCurrentPrompt(pi, state, systemPromptText(_event.systemPrompt));
+		// oh-my-pi carries the system prompt as a string[] and expects a string[]
+		// result; upstream pi uses plain strings. Echo the incoming shape.
+		return {
+			systemPrompt: (Array.isArray(_event.systemPrompt) ? [composed] : composed) as string,
+		};
 	});
 
 	pi.on("message_end", async (event, ctx) => {
@@ -163,7 +168,7 @@ export default function dshMinimal(pi: ExtensionAPI) {
 		// official two tools even at the active-set level.
 		enforceBootstrapTools(pi, state);
 
-		const assembled = extractRequestSurface(event.payload).system ?? ctx.getSystemPrompt();
+		const assembled = extractRequestSurface(event.payload).system ?? systemPromptText(ctx.getSystemPrompt());
 		const rewritten = rewriteProviderRequest(event.payload, {
 			persona: composeCurrentPrompt(pi, state, assembled),
 			rewriteTools: state.phase.profile === "pro" && !state.phase.promoted,
