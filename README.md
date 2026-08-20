@@ -196,6 +196,11 @@ npm run live:trajectory   # needs a configured DeepSeek V4 Pro model
   Pi identity is not restored.
 - During bootstrap, `bash` is a persistent process. `cd` and `export` stick
   until promotion, session end, or a 300s timeout reset.
+- While the anchored profile is active, complete DeepSeek V4 DSML tool calls
+  leaked as assistant text (official `<｜DSML｜tool_calls>`, bare `<invoke>`, or
+  the observed hosted `tool_calls store:` form) are converted to Pi-native
+  tool calls before dispatch when their names are in Pi's active-tool catalog.
+  Unknown, incomplete, or invalid markup remains text and is not executed.
 - `str_replace_editor` requires **absolute** paths, matching dsh.
 - The extension performs no network requests and adds no telemetry.
 - **oh-my-pi (omp) works.** omp's legacy shim lacks `getReadmePath` /

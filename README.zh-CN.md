@@ -181,6 +181,10 @@ npm run live:trajectory   # 需要已配置 DeepSeek V4 Pro
   的追加。Pi identity 不恢复。
 - 引导期内 `bash` 是持久进程。`cd` 和 `export` 会保持到晋升、会话结束，或
   300 秒超时重置。
+- anchored 配置生效时，若 DeepSeek V4 把完整工具调用泄漏成助手文本（官方
+  `<｜DSML｜tool_calls>`、裸 `<invoke>`，或已观察到的 `tool_calls store:`
+  变体），扩展会在派发前把其中已存在于 Pi 当前 active tool 目录的调用转换成
+  原生工具调用。未知、未闭合或参数无效的标记仍保留为文字，不会执行。
 - `str_replace_editor` 要求 **绝对路径**，与 dsh 一致。
 - 扩展不发起网络请求，也不增加遥测。
 - **兼容 oh-my-pi (omp)**。omp 的 legacy shim 不导出 `getReadmePath` /

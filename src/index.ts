@@ -4,6 +4,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { readDshMinimalConfig } from "./adapter/config.ts";
 import { resolveAdapterProfile, shouldUseAdapter, syncAdapter } from "./adapter/activation.ts";
 import { extractRequestSurface, rewriteProviderRequest } from "./adapter/payload-rewrite.ts";
+import { convertDsmlAssistantMessage } from "./adapter/dsml.ts";
 import { composeAnchoredPrompt, promptResourcesFrom, systemPromptText, toolResourcesFromLiveTools } from "./adapter/prompt.ts";
 import { isPromoted, scanSessionPhase } from "./adapter/promotion.ts";
 import { emptyPromptResources, emptySessionPhase, type AdapterState } from "./adapter/state.ts";
@@ -140,8 +141,17 @@ export default function dshMinimal(pi: ExtensionAPI) {
 	});
 
 	pi.on("message_end", async (event, ctx) => {
-		noteAssistant(state, event.message);
+		let replacement: AgentMessage | undefined;
+		if (state.phase.profile === "pro" && event.message.role === "assistant") {
+			const activeToolNames = new Set(pi.getActiveTools());
+			replacement = convertDsmlAssistantMessage(
+				event.message,
+				pi.getAllTools().filter((tool) => activeToolNames.has(tool.name)),
+			);
+		}
+		noteAssistant(state, replacement ?? event.message);
 		if (state.phase.hasAssistant || state.phase.hasTool) refreshPhase(pi, ctx, state);
+		if (replacement) return { message: replacement };
 	});
 
 	pi.on("tool_call", async (_event, ctx) => {
@@ -192,4 +202,5 @@ export {
 	readDshMinimalConfig,
 	scanSessionPhase,
 	isPromoted,
+	convertDsmlAssistantMessage,
 };
