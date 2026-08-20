@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { readDshMinimalConfig } from "./adapter/config.ts";
-import { resolveAdapterProfile, shouldUseAdapter, syncAdapter } from "./adapter/activation.ts";
+import { enforceBootstrapTools, resolveAdapterProfile, shouldUseAdapter, syncAdapter } from "./adapter/activation.ts";
 import { extractRequestSurface, rewriteProviderRequest } from "./adapter/payload-rewrite.ts";
 import { convertDsmlAssistantMessage } from "./adapter/dsml.ts";
 import { composeAnchoredPrompt, promptResourcesFrom, systemPromptText, toolResourcesFromLiveTools } from "./adapter/prompt.ts";
@@ -162,6 +162,11 @@ export default function dshMinimal(pi: ExtensionAPI) {
 	pi.on("before_provider_request", async (event, ctx) => {
 		refreshPhase(pi, ctx, state);
 		if (state.phase.profile === "inactive") return undefined;
+
+		// Other extensions may have appended tools to the active set during
+		// before_agent_start; the first-turn surface must stay exactly the
+		// official two tools even at the active-set level.
+		enforceBootstrapTools(pi, state);
 
 		const assembled = extractRequestSurface(event.payload).system ?? systemPromptText(ctx.getSystemPrompt());
 		const rewritten = rewriteProviderRequest(event.payload, {

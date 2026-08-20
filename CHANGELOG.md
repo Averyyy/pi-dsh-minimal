@@ -12,6 +12,26 @@
   prompt as a `string[]` of segments (upstream pi: one `string`) in
   `before_agent_start` and `ctx.getSystemPrompt()`, and expects a `string[]`
   result — the adapter now echoes the incoming shape on promote.
+- **Fix: switching away from a matching model before the first turn no longer strands the session on the adapter's bash.**
+  `applySurface` now runs the full `leaveBootstrap` restore when the profile goes `bootstrap -> off`
+  (e.g. `deepseek-v4-flash` selected at session start, then switched to `glm-5.3` before any request).
+  Previously only `str_replace_editor` was dropped, leaving the dsh bash override active and hiding
+  `read` / `edit` / `write` / web tools for the rest of the session.
+- **Fix: promotion restores every currently registered Pi tool, not just the pre-bootstrap snapshot.**
+  `leaveBootstrap` now unions the pre-bootstrap snapshot with the live `pi.getAllTools()` catalog,
+  so extension tools registered after the snapshot (web search, subagents, MCP, custom tools) survive
+  promotion instead of disappearing for the rest of the session.
+  Also handles the real bootstrap shape where `pi-all-tools` / `ask_user_question` add a few tools on
+  top of `bash` + `str_replace_editor`: those additions used to make `restoreTools` keep the small set
+  instead of restoring the full catalog. Request #1 stays official minimal.
+- **Fix: reload/resume of an already-promoted session restores built-in read/edit/write.**
+  `/reload` keeps the previous active base tool names, so a session that had been through bootstrap
+  lost `read` / `edit` / `write` permanently. `applySurface` now runs the restore path for any
+  transition into `promoted` (not only `bootstrap -> promoted`).
+- **Fix: the bootstrap active set is pinned back to `bash` + `str_replace_editor`.**
+  Other extensions (pi-all-tools, ask_user_question, MCP) append tools during `before_agent_start`;
+  `before_provider_request` now re-asserts the official two-tool surface when not promoted, so the
+  first turn never exposes (or internally keeps) their additions.
 
 ## 0.4.2
 

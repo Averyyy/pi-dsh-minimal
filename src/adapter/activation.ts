@@ -7,8 +7,7 @@ import {
 	ADAPTER_TOOL_NAMES,
 	BASH_TOOL_NAME,
 	buildStatusText,
-	DEFAULT_TOOL_NAMES,
-	restoreTools,
+	restorePromotedTools,
 	STATUS_KEY,
 	stripOwnedTools,
 } from "./tool-set.ts";
@@ -38,7 +37,15 @@ function applySurface(pi: ExtensionAPI, ctx: ExtensionContext, state: AdapterSta
 
 	if (surface === "bootstrap") {
 		enterBootstrap(pi, state);
-	} else if (state.surface === "bootstrap") {
+	} else if (surface === "promoted") {
+		// Covers both bootstrap->promoted and off->promoted (reload/resume of an
+		// already-promoted session). Reload keeps the previous active base tools,
+		// so built-ins like read/edit/write must be restored explicitly.
+		leaveBootstrap(pi, state);
+	} else if (surface === "off" && state.surface === "bootstrap") {
+		// Model/config changed to inactive while still on the two-tool bootstrap
+		// surface (e.g. deepseek -> glm before the first turn). Restore the full
+		// catalog and Pi bash instead of leaving only the adapter's bash behind.
 		leaveBootstrap(pi, state);
 	}
 
@@ -65,9 +72,25 @@ function leaveBootstrap(pi: ExtensionAPI, state: AdapterState): void {
 		if (bashStillOurs(pi)) restorePiBash(pi, state.cwd);
 		state.bashOverrideInstalled = false;
 	}
-	const previousToolNames =
-		state.previousToolNames && state.previousToolNames.length > 0 ? state.previousToolNames : DEFAULT_TOOL_NAMES;
-	pi.setActiveTools(restoreTools(previousToolNames, pi.getActiveTools()));
+	// Restore the pre-bootstrap snapshot *plus* every tool currently registered.
+	// Extensions may register tools after the snapshot was taken; without this
+	// union those tools (web_search, fetch_content, subagent, …) would be
+	// dropped forever once promotion happens.
+	pi.setActiveTools(restorePromotedTools(state.previousToolNames ?? [], pi.getActiveTools(), pi.getAllTools()));
+}
+
+/**
+ * Re-assert the official two-tool surface right before the wire request.
+ *
+ * Other extensions (pi-all-tools, ask_user_question, MCP, ...) may append
+ * tools to the active set during before_agent_start. The bootstrap request
+ * must stay exactly bash + str_replace_editor, so after all those handlers
+ * have run we pin the active set back to the two adapter tools.
+ */
+export function enforceBootstrapTools(pi: ExtensionAPI, state: AdapterState): void {
+	if (state.phase.profile === "pro" && !state.phase.promoted) {
+		pi.setActiveTools([...ADAPTER_TOOL_NAMES]);
+	}
 }
 
 function deactivateOwnedTools(pi: ExtensionAPI): void {
