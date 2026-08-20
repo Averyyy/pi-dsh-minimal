@@ -121,10 +121,12 @@ export function systemPromptText(value: string | readonly string[] | undefined):
  */
 export function reanchorPersona(system: string): string {
 	const text = system.replace(/^\uFEFF?[\s\n]*/, "");
-	if (text.startsWith(MINIMAL_PROMPT)) return text;
-	if (text.startsWith(PI_IDENTITY)) return MINIMAL_PROMPT + text.slice(PI_IDENTITY.length);
-	if (text.length === 0) return MINIMAL_PROMPT;
-	return `${MINIMAL_PROMPT}\n\n${text}`;
+	// pi-cache-optimizer can move the stock identity behind skills or other
+	// stable sections. Remove only this exact known paragraph, wherever it lands.
+	const withoutPiIdentity = text.replaceAll(PI_IDENTITY, "");
+	if (withoutPiIdentity.startsWith(MINIMAL_PROMPT)) return withoutPiIdentity;
+	if (withoutPiIdentity.length === 0) return MINIMAL_PROMPT;
+	return `${MINIMAL_PROMPT}${withoutPiIdentity.startsWith("\n") ? "" : "\n\n"}${withoutPiIdentity}`;
 }
 
 /**

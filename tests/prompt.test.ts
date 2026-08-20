@@ -86,6 +86,15 @@ test("reanchorPersona replaces Pi identity and keeps extension text", () => {
 	assert.match(reanchored, /<hypa-context>keep me<\/hypa-context>/);
 });
 
+test("reanchorPersona removes a Pi identity reordered behind extension content", () => {
+	const assembled = `${MINIMAL_PROMPT}\n\n<available_skills>\n  <skill>keep me</skill>\n</available_skills>\n\n---\n\n${PI_IDENTITY}\n\nAvailable tools:\n- bash: Run a command`;
+	const reanchored = reanchorPersona(assembled);
+	assert.ok(reanchored.startsWith(MINIMAL_PROMPT));
+	assert.equal(reanchored.includes(PI_IDENTITY), false);
+	assert.match(reanchored, /<available_skills>/);
+	assert.match(reanchored, /Available tools:/);
+});
+
 test("promoted compose reanchors Pi's prompt and does not drop other extensions", () => {
 	const assembled = `${PI_IDENTITY}\n\nAvailable tools:\n- read: Read a file\n\nPi documentation (read only when the user asks about pi itself):\n- Main documentation: /docs\n\n<project_context>\n\nProject-specific instructions and guidelines:\n\n<project_instructions path="/proj/AGENTS.md">\nUse bun.\n</project_instructions>\n\n</project_context>\n\n<hermes-memory>prior note</hermes-memory>`;
 	const prompt = composeAnchoredPrompt({

@@ -22,6 +22,10 @@
   them before that hook, so the late reset could not affect the in-flight request and discarded active
   extension additions. Reload/resume of an already-promoted session now keeps Pi's selected tools and
   removes only the adapter-owned editor.
+- **Fix: promoted prompts no longer retain Pi's identity after another extension reorders the prompt.**
+  The adapter now removes the exact stock Pi identity paragraph wherever it occurs, including after
+  `pi-cache-optimizer` moves skills ahead of it. The rest of Pi and extension context remains intact.
+  `live:promote` now checks the actual contract: official persona first, Pi identity absent.
 
 ## 0.4.2
 

@@ -8,6 +8,8 @@ import { writeFileSync } from "node:fs";
 import { createIsolatedAgent, parseEvents, readDumpSurfaces, runPi } from "./live-harness.mjs";
 
 const MODEL = process.env.PI_DSH_MINIMAL_MODEL || "opencode-go/deepseek-v4-pro:max";
+const MINIMAL_PROMPT = "You are a helpful software engineer assistant.";
+const PI_IDENTITY = "You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
 const FIRST =
 	process.env.PI_DSH_MINIMAL_PROMPT ||
 	"main.py prints hello. Change it so it prints world instead. Inspect the file first, then edit it.";
@@ -42,7 +44,7 @@ if (!bootstrap) {
 	console.error("FAIL: no first-request dump");
 	process.exit(1);
 }
-if (bootstrap.system !== "You are a helpful software engineer assistant.") {
+if (bootstrap.system !== MINIMAL_PROMPT) {
 	console.error("FAIL: first request persona is not official minimal");
 	process.exit(1);
 }
@@ -83,8 +85,12 @@ if (!promoted) {
 	console.error("FAIL: no second-request dump");
 	process.exit(1);
 }
-if (promoted.system !== "You are a helpful software engineer assistant.") {
-	console.error("FAIL: promoted persona should stay official minimal");
+if (typeof promoted.system !== "string" || !promoted.system.startsWith(MINIMAL_PROMPT)) {
+	console.error("FAIL: promoted persona does not keep the official minimal sentence first");
+	process.exit(1);
+}
+if (promoted.system.includes(PI_IDENTITY)) {
+	console.error("FAIL: promoted prompt restored Pi's identity paragraph");
 	process.exit(1);
 }
 if (promoted.promoted !== true) {
